@@ -307,29 +307,14 @@ class CartService {
       console.log('Cart updated after adding item:', this.cart);
       this.notifySubscribers();
 
-      // Show success message using error dialog service
+      // Show success toast for 3 seconds
       if (data.message && data.msg_code === 'CART_ADDED_ITEM') {
-        errorDialogService.showSuccess({
-          title: 'Sucesso!',
-          message: data.message,
-          autoClose: true,
-          autoCloseDelay: 2000
-        });
+        this.showToast(data.message, 3000);
       } else if (data.message) {
-        errorDialogService.showSuccess({
-          title: 'Sucesso!',
-          message: data.message,
-          autoClose: true,
-          autoCloseDelay: 2000
-        });
+        this.showToast(data.message, 3000);
       } else {
         // Fallback success message
-        errorDialogService.showSuccess({
-          title: 'Sucesso!',
-          message: 'Item adicionado ao carrinho com sucesso!',
-          autoClose: true,
-          autoCloseDelay: 2000
-        });
+        this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
       }
 
     } catch (error) {
@@ -578,8 +563,8 @@ class CartService {
     };
   }
 
-  private showToast(message: string): void {
-    console.log('Showing toast:', message);
+  private showToast(message: string, duration: number = 3000): void {
+    console.log('Showing toast:', message, 'for', duration, 'ms');
     
     // Create toast element
     const toast = document.createElement('div');
@@ -612,7 +597,7 @@ class CartService {
       toast.style.transform = 'translateX(0)';
     });
 
-    // Remove toast after 3 seconds
+    // Remove toast after specified duration
     setTimeout(() => {
       toast.style.opacity = '0';
       toast.style.transform = 'translateX(100%)';
@@ -621,7 +606,7 @@ class CartService {
           toast.parentNode.removeChild(toast);
         }
       }, 300);
-    }, 3000);
+    }, duration);
   }
 
   // Validation methods

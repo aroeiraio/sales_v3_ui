@@ -1,0 +1,10 @@
+{
+  "AutoplayAllowed": true,
+  "AutoplayPolicy": "no-user-gesture-required",
+  "DefaultMediaStreamSetting": 1,
+  "MediaStreamMicDefault": 1,
+  "MediaStreamCameraDefault": 1,
+  "AudioCaptureAllowed": true,
+  "VideoCaptureAllowed": true,
+  "WebRtcUdpPortRange": "49152-65535"
+}

@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System - Pinpad Instructions V1</title>
+    <link rel="stylesheet" href="pos_theme.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+        /* Base styles from original */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: var(--font-sans);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--background);
+            color: var(--foreground);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header styles */
+        .header {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .header-top {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 0.5rem 2rem;
+            font-size: 0.875rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-main {
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .page-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Instructions card with new design */
+        .instructions-card {
+            background: var(--card);
+            border-radius: var(--radius-lg);
+            padding: 3rem;
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .instructions-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+
+        .instructions-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--foreground);
+        }
+
+        .instructions-subtitle {
+            font-size: 1.125rem;
+            color: var(--muted-foreground);
+        }
+
+        /* Amount display with new design */
+        .amount-display {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: var(--background);
+            border-radius: var(--radius-lg);
+            border: 2px solid var(--border);
+            position: relative;
+        }
+
+        .amount-label {
+            font-size: 1rem;
+            color: var(--muted-foreground);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+        }
+
+        .amount-value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--foreground);
+            line-height: 1.2;
+        }
+
+        /* Steps section with new design */
+        .steps-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .steps-container::before {
+            content: '';
+            position: absolute;
+            left: 24px;
+            top: 48px;
+            bottom: 48px;
+            width: 2px;
+            background: var(--border);
+            z-index: 0;
+        }
+
+        .step {
+            display: flex;
+            gap: 2rem;
+            padding: 1.5rem;
+            background: var(--background);
+            border-radius: var(--radius-lg);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .step.active {
+            background: var(--card);
+            transform: translateX(0.5rem);
+            box-shadow: var(--shadow-md);
+        }
+
+        .step-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--muted);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            z-index: 1;
+            border: 2px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .step.active .step-icon {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border-color: var(--primary);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(var(--primary), 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(var(--primary), 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(var(--primary), 0);
+            }
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--foreground);
+            font-size: 1.125rem;
+        }
+
+        .step-description {
+            color: var(--muted-foreground);
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        /* Button indicators */
+        .button-indicators {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .button-indicator {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .button-red {
+            background: rgba(239, 68, 68, 0.1);
+            color: rgb(239, 68, 68);
+        }
+
+        .button-green {
+            background: rgba(16, 185, 129, 0.1);
+            color: rgb(16, 185, 129);
+        }
+
+        /* Cancel button with new design */
+        .cancel-button {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            background: transparent;
+            border: 2px solid var(--border);
+            color: var(--destructive);
+            border-radius: var(--radius);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 3rem auto 0;
+        }
+
+        .cancel-button:hover {
+            background: var(--destructive);
+            color: white;
+            border-color: var(--destructive);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .header-top,
+            .header-main {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .instructions-card {
+                padding: 2rem 1.5rem;
+            }
+
+            .step {
+                padding: 1rem;
+                gap: 1.5rem;
+            }
+
+            .amount-display {
+                padding: 1.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .amount-value {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-top">
+            <div class="status-indicator">
+                <i data-lucide="wifi-off"></i>
+                <span>Modo Offline</span>
+            </div>
+            <div class="time">12:00</div>
+        </div>
+        <div class="header-main">
+            <h1 class="page-title">Pagamento com Cartão</h1>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="instructions-card">
+            <div class="instructions-header">
+                <h2 class="instructions-title">Siga as instruções do Pinpad</h2>
+                <p class="instructions-subtitle">Por favor, siga os passos abaixo para completar seu pagamento</p>
+            </div>
+
+            <div class="amount-display">
+                <div class="amount-label">Valor a pagar</div>
+                <div class="amount-value">R$ 19,50</div>
+            </div>
+
+            <div class="steps-container">
+                <div class="step active">
+                    <div class="step-icon">
+                        <i data-lucide="power"></i>
+                    </div>
+                    <div class="step-content">
+                        <h3 class="step-title">Pressione os Botões</h3>
+                        <p class="step-description">
+                            Pressione o botão vermelho e depois o verde para iniciar a operação
+                        </p>
+                        <div class="button-indicators">
+                            <span class="button-indicator button-red">Vermelho</span>
+                            <span class="button-indicator button-green">Verde</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-icon">
+                        <i data-lucide="credit-card"></i>
+                    </div>
+                    <div class="step-content">
+                        <h3 class="step-title">Aproxime ou Insira seu Cartão</h3>
+                        <p class="step-description">
+                            Aproxime seu cartão do leitor ou insira o chip para iniciar o pagamento
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-icon">
+                        <i data-lucide="check-circle"></i>
+                    </div>
+                    <div class="step-content">
+                        <h3 class="step-title">Aguarde a Confirmação</h3>
+                        <p class="step-description">
+                            Não remova o cartão até que a transação seja concluída
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-icon">
+                        <i data-lucide="arrow-left"></i>
+                    </div>
+                    <div class="step-content">
+                        <h3 class="step-title">Retire seu Cartão</h3>
+                        <p class="step-description">
+                            Retire seu cartão do Pinpad quando solicitado
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <button class="cancel-button">
+                <i data-lucide="x"></i>
+                Cancelar Pagamento
+            </button>
+        </div>
+    </main>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.querySelector('.time').textContent = now.toLocaleTimeString('pt-BR');
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Demo: Simulate step progression
+        let currentStep = 0;
+        const steps = document.querySelectorAll('.step');
+
+        function progressStep() {
+            steps[currentStep].classList.remove('active');
+            currentStep = (currentStep + 1) % steps.length;
+            steps[currentStep].classList.add('active');
+        }
+
+        // Uncomment to enable auto progression
+        // setInterval(progressStep, 3000);
+    </script>
+</body>
+</html>

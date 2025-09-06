@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Muted Video Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .video-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        video {
+            width: 100%;
+            height: auto;
+        }
+        .info {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #4CAF50; }
+        .error { background: #f44336; }
+        .warning { background: #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <h1>Muted Video Autoplay Test</h1>
+        
+        <div class="info">
+            <h3>Test Information</h3>
+            <p><strong>Expected URL:</strong> http://localhost:8090/media/videos/simplescreenrecorder-2024-10-23_09.25.29.mp4</p>
+            <p><strong>Video Attributes:</strong> muted, autoplay, playsinline</p>
+            <p><strong>Purpose:</strong> Test if muted video can autoplay without user interaction</p>
+        </div>
+
+        <div id="status" class="status warning">
+            Loading video...
+        </div>
+
+        <video 
+            id="testVideo"
+            muted 
+            autoplay 
+            playsinline
+            preload="auto"
+            onloadeddata="onVideoLoaded()"
+            oncanplay="onVideoCanPlay()"
+            onerror="onVideoError(event)"
+            onplay="onVideoPlay()"
+            onpause="onVideoPause()"
+        >
+            <source src="http://localhost:8090/media/videos/simplescreenrecorder-2024-10-23_09.25.29.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="info">
+            <h3>Video Properties</h3>
+            <p><strong>Muted:</strong> <span id="mutedStatus">-</span></p>
+            <p><strong>Volume:</strong> <span id="volumeStatus">-</span></p>
+            <p><strong>Autoplay:</strong> <span id="autoplayStatus">-</span></p>
+            <p><strong>Current Source:</strong> <span id="sourceStatus">-</span></p>
+            <p><strong>Ready State:</strong> <span id="readyState">-</span></p>
+        </div>
+
+        <div class="info">
+            <h3>Controls</h3>
+            <button onclick="toggleMute()">Toggle Mute</button>
+            <button onclick="playVideo()">Play</button>
+            <button onclick="pauseVideo()">Pause</button>
+            <button onclick="reloadVideo()">Reload</button>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('testVideo');
+        const status = document.getElementById('status');
+        
+        function updateStatus(message, type = 'warning') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        function updateVideoInfo() {
+            document.getElementById('mutedStatus').textContent = video.muted ? 'Yes' : 'No';
+            document.getElementById('volumeStatus').textContent = video.volume;
+            document.getElementById('autoplayStatus').textContent = video.autoplay ? 'Yes' : 'No';
+            document.getElementById('sourceStatus').textContent = video.src || 'No source';
+            document.getElementById('readyState').textContent = video.readyState;
+        }
+
+        function onVideoLoaded() {
+            updateStatus('Video loaded successfully!', 'success');
+            updateVideoInfo();
+        }
+
+        function onVideoCanPlay() {
+            updateStatus('Video can play - attempting autoplay...', 'warning');
+            updateVideoInfo();
+        }
+
+        function onVideoError(event) {
+            updateStatus(`Video error: ${event.target.error?.message || 'Unknown error'}`, 'error');
+            updateVideoInfo();
+        }
+
+        function onVideoPlay() {
+            updateStatus('Video is playing! ✅', 'success');
+            updateVideoInfo();
+        }
+
+        function onVideoPause() {
+            updateStatus('Video is paused', 'warning');
+            updateVideoInfo();
+        }
+
+        function toggleMute() {
+            video.muted = !video.muted;
+            updateVideoInfo();
+        }
+
+        function playVideo() {
+            video.play().then(() => {
+                updateStatus('Video started playing manually', 'success');
+            }).catch(error => {
+                updateStatus(`Play failed: ${error.message}`, 'error');
+            });
+        }
+
+        function pauseVideo() {
+            video.pause();
+            updateStatus('Video paused manually', 'warning');
+        }
+
+        function reloadVideo() {
+            video.load();
+            updateStatus('Video reloaded', 'warning');
+        }
+
+        // Update info every second
+        setInterval(updateVideoInfo, 1000);
+
+        // Initial update
+        updateVideoInfo();
+    </script>
+</body>
+</html>

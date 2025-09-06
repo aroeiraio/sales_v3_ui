@@ -1,0 +1,75 @@
+:root {
+  /* Base colors from provided palette */
+  --background: var(--light-yellow);
+  --foreground: #2C3E50;
+  
+  /* Brand colors */
+  --cerulean: #0081a7ff;
+  --verdigris: #00afb9ff;
+  --light-yellow: #fdfcdcff;
+  --light-orange: #fed9b7ff;
+  --bittersweet: #f07167ff;
+  
+  /* Semantic mappings */
+  --primary: var(--cerulean);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--verdigris);
+  --secondary-foreground: #FFFFFF;
+  --muted: #E5E5E5;
+  --muted-foreground: #64748B;
+  --accent: var(--light-orange);
+  --accent-foreground: #1E293B;
+  
+  /* UI Elements */
+  --card: #FFFFFF;
+  --card-foreground: #1E293B;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E293B;
+  --destructive: var(--bittersweet);
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E8F0;
+  --input: #F1F5F9;
+  --ring: var(--cerulean);
+  
+  /* Status Colors */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: var(--bittersweet);
+  
+  /* Data Visualization */
+  --chart-1: var(--cerulean);
+  --chart-2: var(--verdigris);
+  --chart-3: var(--bittersweet);
+  --chart-4: var(--light-orange);
+  --chart-5: var(--light-yellow);
+  
+  /* Navigation */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1E293B;
+  --sidebar-muted: #64748B;
+  --sidebar-accent: var(--light-orange);
+  
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-serif: 'Playfair Display', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* Spacing & Layout */
+  --radius: 1rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  
+  /* Shadows */
+  --shadow-xs: 0px 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0px 2px 4px rgba(16, 24, 40, 0.05);
+  --shadow: 0px 4px 6px -1px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0px 6px 8px rgba(16, 24, 40, 0.05);
+  --shadow-lg: 0px 8px 16px rgba(16, 24, 40, 0.05);
+  --shadow-xl: 0px 12px 24px rgba(16, 24, 40, 0.05);
+  
+  /* Touch Targets */
+  --touch-target: 2.75rem;  /* 44px */
+  --spacing: 1rem;
+}

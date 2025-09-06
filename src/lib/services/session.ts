@@ -38,11 +38,11 @@ class SessionService {
       // Show error dialog for session initialization failure
       errorDialogService.showError({
         title: 'Erro de Sessão',
-        message: 'Não foi possível iniciar a sessão. Tente novamente.',
+        message: 'Não foi possível iniciar a sessão. Verifique sua conexão e tente novamente.',
         actions: [
           {
-            label: 'Tentar Novamente',
-            action: () => this.startSession(),
+            label: 'Fechar',
+            action: () => {},
             variant: 'primary'
           }
         ]

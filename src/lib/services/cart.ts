@@ -1,13 +1,27 @@
 import { errorDialogService } from './errorDialog';
+import { sessionService } from './session';
 import { cart, cartActions } from '../stores/cart';
 
 export interface CartItem {
-  productId: string;
+  amount: number;
+  categoryId: number;
+  controlled: number;
+  description: string;
+  expiration: string;
+  itemId: number;
+  media: Array<{
+    filename: string;
+    pending: number;
+    source: string;
+    url: string;
+  }>;
   name: string;
   price: number;
   quantity: number;
-  image?: string;
-  maxQuantity?: number;
+  saleLimit: number;
+  subtotal: number;
+  type: string;
+  variantId: number;
 }
 
 export interface Cart {
@@ -31,51 +45,237 @@ class CartService {
 
   async getCart(): Promise<Cart> {
     try {
-      const response = await fetch('/interface/cart');
+      const response = await fetch('http://localhost:8090/interface/cart');
+      
+      if (response.status === 404) {
+        // Empty cart - return default empty cart
+        this.cart = {
+          items: [],
+          total: 0,
+          subtotal: 0,
+          serviceFee: 0,
+          discount: 0
+        };
+        this.notifySubscribers();
+        return this.cart;
+      }
+      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
-      this.cart = data;
+      console.log('Cart API response:', data);
+      
+      // API returns array of items directly, we need to transform it
+      this.cart = this.transformApiResponseToCart(data);
       this.notifySubscribers();
       return this.cart;
     } catch (error) {
       console.error('Failed to load cart:', error);
-      errorDialogService.showNetworkError(() => this.getCart());
-      throw error;
+      // Return empty cart instead of throwing error
+      this.cart = {
+        items: [],
+        total: 0,
+        subtotal: 0,
+        serviceFee: 0,
+        discount: 0
+      };
+      this.notifySubscribers();
+      return this.cart;
     }
   }
 
-  async addItem(productId: string, quantity: number = 1): Promise<void> {
+  async addItem(itemId: number, type: string = 'product', retryCount: number = 0): Promise<void> {
     try {
-      const response = await fetch('/interface/cart', {
+      const response = await fetch('http://localhost:8090/interface/cart/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          productId,
-          quantity
+          type,
+          itemId
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          // Check if there's an error message in the response
+          if (errorData.message && errorData.msg_code) {
+            console.log('404 response with error:', errorData);
+            
+            // Handle specific error codes
+            switch (errorData.msg_code) {
+              case 'SALES_LIMIT_REACHED':
+                errorDialogService.showError({
+                  title: 'Limite de Compra Atingido',
+                  message: errorData.message,
+                  actions: [
+                    {
+                      label: 'Ver Carrinho',
+                      action: () => window.location.href = '/cart',
+                      variant: 'primary'
+                    },
+                    {
+                      label: 'Continuar Comprando',
+                      action: () => {
+                        // Close the dialog by finding and closing it
+                        const dialogs = errorDialogService.getDialogs();
+                        if (dialogs.length > 0) {
+                          errorDialogService.closeDialog(dialogs[dialogs.length - 1]);
+                        }
+                      },
+                      variant: 'secondary'
+                    }
+                  ]
+                });
+                return;
+              case 'CART_SESSION_NOT_OPENED':
+                if (retryCount >= 1) {
+                  console.error('Max retries reached for session creation (404)');
+                  errorDialogService.showError({
+                    title: 'Erro de Sessão',
+                    message: 'Não foi possível criar uma sessão de compra após múltiplas tentativas.',
+                    actions: [
+                      {
+                        label: 'Tentar Novamente',
+                        action: () => this.addItem(itemId, type, 0),
+                        variant: 'primary'
+                      }
+                    ]
+                  });
+                  return;
+                }
+                
+                console.log('404: Session not opened, creating session and retrying');
+                try {
+                  await sessionService.startSession();
+                  console.log('Session created, retrying add item');
+                  // Retry adding the item after creating the session
+                  return await this.addItem(itemId, type, retryCount + 1);
+                } catch (sessionError) {
+                  console.error('Failed to create session:', sessionError);
+                  errorDialogService.showError({
+                    title: 'Erro de Sessão',
+                    message: 'Não foi possível criar uma sessão de compra. Tente novamente.',
+                    actions: [
+                      {
+                        label: 'Tentar Novamente',
+                        action: () => this.addItem(itemId, type, 0),
+                        variant: 'primary'
+                      }
+                    ]
+                  });
+                  return;
+                }
+              default:
+                // Show generic error for other 404 error codes
+                errorDialogService.showError({
+                  title: 'Erro ao Adicionar Item',
+                  message: errorData.message,
+                  actions: [
+                    {
+                      label: 'Tentar Novamente',
+                      action: () => this.addItem(itemId, type, 0),
+                      variant: 'primary'
+                    }
+                  ]
+                });
+                return;
+            }
+          } else {
+            // Cart doesn't exist yet, but item was added - this is normal
+            console.log('Cart created with new item');
+            // Refresh cart data to get the updated cart
+            await this.getCart();
+            return;
+          }
+        }
+        
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('Add item API response:', data);
       
       // Check for specific error codes
       if (data.error) {
         switch (data.error.code) {
           case 'STOCK_UNAVAILABLE':
+            console.log('Showing stock error dialog');
             errorDialogService.showCartError('stock');
             return;
           case 'MAX_ITEMS_REACHED':
+            console.log('Showing limit error dialog');
             errorDialogService.showCartError('limit');
             return;
+          case 'SALES_LIMIT_REACHED':
+            console.log('Showing sales limit error dialog');
+            errorDialogService.showError({
+              title: 'Limite de Compra Atingido',
+              message: data.error.message || 'Não é possível adicionar mais produtos. O limite de itens da compra foi alcançado.',
+              actions: [
+                {
+                  label: 'Ver Carrinho',
+                  action: () => window.location.href = '/cart',
+                  variant: 'primary'
+                },
+                {
+                  label: 'Continuar Comprando',
+                  action: () => {
+                    // Close the dialog by finding and closing it
+                    const dialogs = errorDialogService.getDialogs();
+                    if (dialogs.length > 0) {
+                      errorDialogService.closeDialog(dialogs[dialogs.length - 1]);
+                    }
+                  },
+                  variant: 'secondary'
+                }
+              ]
+            });
+            return;
+          case 'CART_SESSION_NOT_OPENED':
+            if (retryCount >= 1) {
+              console.error('Max retries reached for session creation');
+              errorDialogService.showError({
+                title: 'Erro de Sessão',
+                message: 'Não foi possível criar uma sessão de compra após múltiplas tentativas.',
+                actions: [
+                  {
+                    label: 'Tentar Novamente',
+                    action: () => this.addItem(itemId, type, 0),
+                    variant: 'primary'
+                  }
+                ]
+              });
+              return;
+            }
+            
+            console.log('Session not opened, creating session and retrying');
+            try {
+              await sessionService.startSession();
+              console.log('Session created, retrying add item');
+              // Retry adding the item after creating the session
+              return await this.addItem(itemId, type, retryCount + 1);
+            } catch (sessionError) {
+              console.error('Failed to create session:', sessionError);
+              errorDialogService.showError({
+                title: 'Erro de Sessão',
+                message: 'Não foi possível criar uma sessão de compra. Tente novamente.',
+                actions: [
+                  {
+                    label: 'Tentar Novamente',
+                    action: () => this.addItem(itemId, type, 0),
+                    variant: 'primary'
+                  }
+                ]
+              });
+              return;
+            }
           case 'PRODUCT_NOT_FOUND':
             errorDialogService.showError({
               title: 'Produto Não Encontrado',
@@ -95,30 +295,59 @@ class CartService {
       }
 
       // Update local cart state
-      this.cart = data.cart;
+      if (data.cart) {
+        this.cart = this.transformApiResponseToCart(data.cart);
+      } else if (Array.isArray(data)) {
+        this.cart = this.transformApiResponseToCart(data);
+      } else {
+        // Fallback: refresh cart data
+        await this.getCart();
+        return;
+      }
+      console.log('Cart updated after adding item:', this.cart);
       this.notifySubscribers();
 
-      // Show success feedback
-      errorDialogService.showSuccess({
-        title: 'Item Adicionado',
-        message: 'Produto adicionado ao carrinho com sucesso!',
-        autoClose: true,
-        autoCloseDelay: 2000
-      });
+      // Show success message using error dialog service
+      if (data.message && data.msg_code === 'CART_ADDED_ITEM') {
+        errorDialogService.showSuccess({
+          title: 'Sucesso!',
+          message: data.message,
+          autoClose: true,
+          autoCloseDelay: 2000
+        });
+      } else if (data.message) {
+        errorDialogService.showSuccess({
+          title: 'Sucesso!',
+          message: data.message,
+          autoClose: true,
+          autoCloseDelay: 2000
+        });
+      } else {
+        // Fallback success message
+        errorDialogService.showSuccess({
+          title: 'Sucesso!',
+          message: 'Item adicionado ao carrinho com sucesso!',
+          autoClose: true,
+          autoCloseDelay: 2000
+        });
+      }
 
     } catch (error) {
       console.error('Failed to add item to cart:', error);
       
       if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorDialogService.showNetworkError(() => this.addItem(productId, quantity));
+        console.log('Showing network error dialog');
+        errorDialogService.showNetworkError(() => this.addItem(itemId, type, 0));
       } else {
+        console.log('Showing general error dialog');
+        // Show modal with error message as per API specification
         errorDialogService.showError({
           title: 'Erro ao Adicionar Item',
-          message: 'Não foi possível adicionar o item ao carrinho. Tente novamente.',
+          message: error.message || 'Não foi possível adicionar o item ao carrinho. Tente novamente.',
           actions: [
             {
               label: 'Tentar Novamente',
-              action: () => this.addItem(productId, quantity),
+              action: () => this.addItem(itemId, type, 0),
               variant: 'primary'
             },
             {
@@ -134,7 +363,7 @@ class CartService {
 
   async removeItem(productId: string): Promise<void> {
     try {
-      const response = await fetch('/interface/cart', {
+      const response = await fetch('http://localhost:8090/interface/cart', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -149,7 +378,11 @@ class CartService {
       }
 
       const data = await response.json();
-      this.cart = data.cart;
+      if (data.cart) {
+        this.cart = this.transformApiResponseToCart(data.cart);
+      } else if (Array.isArray(data)) {
+        this.cart = this.transformApiResponseToCart(data);
+      }
       this.notifySubscribers();
 
       // Show success feedback
@@ -188,7 +421,7 @@ class CartService {
         return;
       }
 
-      const response = await fetch('/interface/cart', {
+      const response = await fetch('http://localhost:8090/interface/cart', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -221,7 +454,11 @@ class CartService {
       }
 
       const data = await response.json();
-      this.cart = data.cart;
+      if (data.cart) {
+        this.cart = this.transformApiResponseToCart(data.cart);
+      } else if (Array.isArray(data)) {
+        this.cart = this.transformApiResponseToCart(data);
+      }
       this.notifySubscribers();
 
     } catch (error) {
@@ -247,7 +484,7 @@ class CartService {
 
   async clearCart(): Promise<void> {
     try {
-      const response = await fetch('/interface/cart', {
+      const response = await fetch('http://localhost:8090/interface/cart', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -284,15 +521,28 @@ class CartService {
   }
 
   getCartCount(): number {
-    return this.cart.items.reduce((total, item) => total + item.quantity, 0);
+    if (!this.cart || !this.cart.items) {
+      return 0;
+    }
+    return this.cart.items.reduce((total, item) => total + (item.quantity || 0), 0);
   }
 
   getCartTotal(): number {
-    return this.cart.total;
+    return this.cart?.total || 0;
   }
 
   getCartItems(): CartItem[] {
-    return [...this.cart.items];
+    return this.cart?.items ? [...this.cart.items] : [];
+  }
+
+  // Initialize cart if it doesn't exist
+  async initializeCart(): Promise<void> {
+    try {
+      await this.getCart();
+    } catch (error) {
+      console.warn('Failed to initialize cart:', error);
+      // Cart will be created when first item is added
+    }
   }
 
 
@@ -307,7 +557,71 @@ class CartService {
   }
 
   private notifySubscribers(): void {
+    console.log('Notifying subscribers, cart:', this.cart, 'subscribers count:', this.subscribers.length);
     this.subscribers.forEach(callback => callback({ ...this.cart }));
+  }
+
+  private transformApiResponseToCart(apiResponse: any[]): Cart {
+    // API returns array of items, last item contains total info
+    const items = apiResponse.filter(item => item.itemId !== undefined);
+    const totalInfo = apiResponse.find(item => item.total !== undefined);
+    
+    const total = totalInfo ? parseFloat(totalInfo.total) : 0;
+    const subtotal = items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    
+    return {
+      items: items,
+      total: total,
+      subtotal: subtotal,
+      serviceFee: 0,
+      discount: 0
+    };
+  }
+
+  private showToast(message: string): void {
+    console.log('Showing toast:', message);
+    
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #10B981;
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 10000;
+      font-weight: 500;
+      font-size: 14px;
+      max-width: 300px;
+      word-wrap: break-word;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.3s ease-out;
+    `;
+
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateX(0)';
+    });
+
+    // Remove toast after 3 seconds
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 300);
+    }, 3000);
   }
 
   // Validation methods
@@ -337,7 +651,7 @@ class CartService {
   // Checkout validation
   async validateForCheckout(): Promise<{ isValid: boolean; errors: string[] }> {
     try {
-      const response = await fetch('/interface/cart/validate');
+      const response = await fetch('http://localhost:8090/interface/cart/validate');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

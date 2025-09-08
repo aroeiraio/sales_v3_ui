@@ -2,58 +2,139 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
-  import { paymentService, type PaymentMethod, type PaymentResponse } from '$lib/services/payment';
+  import { ArrowLeft } from 'lucide-svelte';
+  import { paymentService, type PaymentMethod, type PaymentResponse, type PaymentState } from '$lib/services/payment';
   import { cartService } from '$lib/services/cart';
   import { sessionService } from '$lib/services/session';
+  import { checkoutService, type PaymentBroker, type CheckoutResponse } from '$lib/services/checkout';
   import { errorDialogService } from '$lib/services/errorDialog';
-  import { offlineService } from '$lib/services/offline';
 
   let selectedPayment: string = '';
   let isProcessing: boolean = false;
-  let paymentStatus: 'idle' | 'processing' | 'success' | 'failed' = 'idle';
+  let paymentState: PaymentState = 'idle';
   let paymentResult: PaymentResponse | null = null;
   let currentTime = new Date().toLocaleTimeString('pt-BR');
+  let cart: any = { items: [], total: 0, subtotal: 0, serviceFee: 0, discount: 0 };
+  let retryCount = 0;
+  let maxRetries = 3;
+  let checkoutData: CheckoutResponse | null = null;
+  let availablePaymentMethods: PaymentBroker[] = [];
 
   const paymentMethods = paymentService.getPaymentMethods();
-  const cart = cartService.getCart();
-  const isOffline = offlineService.isOffline();
 
-  onMount(() => {
+  onMount(async () => {
     if (browser) {
-      // Redirect to cart if cart is empty
-      if (!cart.items || cart.items.length === 0) {
+      try {
+        // Load cart data first
+        cart = await cartService.getCart();
+        
+        // Redirect to cart if cart is empty
+        if (!cart.items || cart.items.length === 0) {
+          goto('/cart');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to load cart:', error);
         goto('/cart');
         return;
       }
 
-      // Check if session is active
-      const session = sessionService.getSession();
-      if (!session || !session.isActive) {
-        errorDialogService.showError({
-          title: 'Sessão Inválida',
-          message: 'Sua sessão expirou. Você será redirecionado para o início.',
-          actions: [
-            {
-              label: 'OK',
-              action: () => goto('/'),
-              variant: 'primary'
-            }
-          ]
+      // Perform checkout to get available payment methods
+      try {
+        console.log('Performing checkout to get available payment methods...');
+        checkoutData = await checkoutService.performCheckout();
+        availablePaymentMethods = checkoutData.brokers;
+        
+        console.log('Checkout successful:', {
+          availableMethods: availablePaymentMethods.length,
+          timestamp: checkoutData.timestamp
         });
+        
+        // If no payment methods are available, redirect back to cart
+        if (availablePaymentMethods.length === 0) {
+          errorDialogService.showWarning({
+            title: 'Nenhum Método de Pagamento Disponível',
+            message: 'Não há métodos de pagamento disponíveis no momento. Tente novamente mais tarde.',
+            actions: [
+              {
+                label: 'Voltar ao Carrinho',
+                action: () => goto('/cart'),
+                variant: 'primary'
+              }
+            ]
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Checkout failed:', error);
+        // Error handling is done in checkoutService
         return;
       }
+
+      // Listen for payment state changes
+      paymentService.onStateChange((newState: PaymentState, data?: any) => {
+        paymentState = newState;
+        
+        if (newState === 'success') {
+          // Handle successful payment
+          paymentResult = {
+            transactionId: data?.transactionId || `success-${Date.now()}`,
+            status: 'success',
+            message: 'Pagamento aprovado com sucesso!',
+            receipt: {
+              transactionId: data?.transactionId || `success-${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              items: cart.items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price
+              })),
+              total: cart.total,
+              paymentMethod: paymentService.getPaymentMethodById(selectedPayment)?.name || selectedPayment
+            }
+          };
+          
+          // Redirect to success page after showing result
+          setTimeout(() => {
+            goto('/');
+          }, 3000);
+        } else if (newState === 'failed') {
+          // Handle failed payment
+          paymentResult = {
+            transactionId: `failed-${Date.now()}`,
+            status: 'failed',
+            message: data?.error || 'Falha no processamento do pagamento'
+          };
+          
+          // Reset after showing error
+          setTimeout(() => {
+            resetPaymentState();
+          }, 3000);
+        } else if (newState === 'retry') {
+          // Handle retry state
+          paymentResult = {
+            transactionId: `retry-${Date.now()}`,
+            status: 'failed',
+            message: data?.message || 'Pagamento recusado. Você pode tentar novamente.'
+          };
+        }
+      });
 
       // Update time every second
       const timeInterval = setInterval(() => {
         currentTime = new Date().toLocaleTimeString('pt-BR');
       }, 1000);
 
-      return () => clearInterval(timeInterval);
+      // Cleanup on unmount
+      return () => {
+        clearInterval(timeInterval);
+        paymentService.stopPolling();
+      };
     }
   });
 
   function selectPaymentMethod(methodId: string) {
-    if (isProcessing) return;
+    if (isProcessing || paymentState !== 'idle') return;
     
     selectedPayment = methodId;
     
@@ -68,51 +149,113 @@
     
     try {
       isProcessing = true;
-      paymentStatus = 'processing';
       
       const result = await paymentService.processPayment(selectedPayment);
       paymentResult = result;
       
-      if (result.status === 'success') {
-        paymentStatus = 'success';
-        
-        // Redirect to success page after showing result
-        setTimeout(() => {
-          goto('/');
-        }, 3000);
-      } else {
-        paymentStatus = 'failed';
-        
-        // Reset after showing error
-        setTimeout(() => {
-          paymentStatus = 'idle';
-          selectedPayment = '';
-          isProcessing = false;
-        }, 3000);
-      }
-      
     } catch (error) {
       console.error('Payment failed:', error);
-      paymentStatus = 'failed';
+      paymentState = 'failed';
+      paymentResult = {
+        transactionId: `error-${Date.now()}`,
+        status: 'failed',
+        message: error.message || 'Erro ao iniciar pagamento'
+      };
       
       setTimeout(() => {
-        paymentStatus = 'idle';
-        selectedPayment = '';
-        isProcessing = false;
+        resetPaymentState();
       }, 3000);
     }
   }
 
-  function goBack() {
-    if (isProcessing) return;
+  function resetPaymentState() {
+    paymentState = 'idle';
+    selectedPayment = '';
+    isProcessing = false;
+    paymentResult = null;
+    paymentService.resetPayment();
+  }
+
+  function retryPayment() {
+    if (retryCount >= maxRetries) {
+      // Too many retries, go to end screen
+      goto('/');
+      return;
+    }
+    
+    retryCount++;
+    paymentService.retryPayment();
+    paymentState = 'idle';
+    isProcessing = false;
+  }
+
+  function cancelPayment() {
+    paymentService.stopPolling();
+    paymentService.resetPayment();
     goto('/cart');
   }
 
-  function formatPrice(price: number): string {
+  function goBack() {
+    if (isProcessing || paymentState !== 'idle') return;
+    goto('/cart');
+  }
+
+  function formatPrice(price: number | undefined | null): string {
+    if (price === undefined || price === null || isNaN(price)) {
+      return 'R$ 0,00';
+    }
     return price.toLocaleString('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     });
+  }
+
+  // Reset timeout on any user interaction
+  function handleUserInteraction() {
+    sessionService.resetTimeout();
+  }
+
+  // Convert API payment methods to UI format
+  function getDisplayPaymentMethods() {
+    const displayMethods = [];
+    
+    for (const broker of availablePaymentMethods) {
+      if (!broker.available) continue;
+      
+      for (const method of broker.methods) {
+        let displayMethod = {
+          id: `${broker.broker}-${method}`,
+          broker: broker.broker,
+          method: method,
+          name: '',
+          description: '',
+          icon: ''
+        };
+        
+        // Map broker and method to display names
+        if (broker.broker === 'MERCADOPAGO') {
+          displayMethod.name = 'PIX';
+          displayMethod.description = 'Pagamento instantâneo via QR Code';
+          displayMethod.icon = 'qr-code';
+        } else if (broker.broker === 'MERCADOPAGO_PINPAD') {
+          if (method === 'credit') {
+            displayMethod.name = 'Cartão de Crédito';
+            displayMethod.description = 'Insira ou aproxime seu cartão';
+            displayMethod.icon = 'credit-card';
+          } else if (method === 'debit') {
+            displayMethod.name = 'Cartão de Débito';
+            displayMethod.description = 'Insira ou aproxime seu cartão';
+            displayMethod.icon = 'landmark';
+          }
+        }
+        
+        if (displayMethod.name) {
+          displayMethods.push(displayMethod);
+        }
+      }
+    }
+    
+    return displayMethods;
   }
 </script>
 
@@ -120,23 +263,17 @@
   <title>Pagamento - InoBag Sales</title>
 </svelte:head>
 
+<svelte:window onclick={handleUserInteraction} onkeydown={handleUserInteraction} />
+
 <div class="checkout-container">
   <header class="header">
     <div class="header-top">
-      <div class="status-indicator">
-        {#if isOffline}
-          <i class="icon-wifi-off"></i>
-          <span>Modo Offline</span>
-        {:else}
-          <i class="icon-wifi"></i>
-          <span>Online</span>
-        {/if}
-      </div>
+      <div></div>
       <div class="time">{currentTime}</div>
     </div>
     <div class="header-main">
       <button class="back-button" onclick={goBack} disabled={isProcessing}>
-        <i class="icon-arrow-left"></i>
+        <ArrowLeft size={20} />
         Voltar
       </button>
       <h1 class="page-title">Pagamento</h1>
@@ -144,11 +281,11 @@
   </header>
 
   <main class="main-content">
-    {#if paymentStatus === 'idle'}
+    {#if paymentState === 'idle'}
       <section class="section">
         <h2 class="section-title">Escolha a forma de pagamento</h2>
         <div class="payment-methods">
-          {#each paymentMethods as method}
+          {#each getDisplayPaymentMethods() as method}
             <button 
               class="payment-method"
               class:selected={selectedPayment === method.id}
@@ -163,6 +300,12 @@
             </button>
           {/each}
         </div>
+        
+        {#if availablePaymentMethods.length === 0}
+          <div class="no-payment-methods">
+            <p>Carregando métodos de pagamento...</p>
+          </div>
+        {/if}
       </section>
 
       <section class="section">
@@ -202,21 +345,101 @@
           </div>
         </div>
       </section>
-    {:else if paymentStatus === 'processing'}
+    {:else if paymentState === 'processing' || paymentState === 'wait'}
       <section class="section payment-status active">
-        <i class="icon-loader-2 status-icon spinning"></i>
+        <div class="status-icon-container">
+          <i class="icon-loader-2 status-icon spinning"></i>
+        </div>
         <div class="status-message">Processando pagamento</div>
-        <div class="status-description">Por favor, aguarde enquanto processamos seu pagamento</div>
+        <div class="status-description">Por favor, aguarde enquanto iniciamos seu pagamento</div>
         <div class="processing-animation">
           <div class="processing-dot"></div>
           <div class="processing-dot"></div>
           <div class="processing-dot"></div>
         </div>
+        <button class="cancel-payment-button" onclick={cancelPayment}>
+          Cancelar pagamento
+        </button>
       </section>
-    {:else if paymentStatus === 'success'}
-      <section class="section payment-status active">
-        <i class="icon-check-circle status-icon success"></i>
-        <div class="status-message">Pagamento aprovado!</div>
+    {:else if paymentState === 'insert_tap_card'}
+      <section class="section payment-status active card-payment-screen">
+        <div class="instructions-header">
+          <h2 class="instructions-title">Siga as instruções do Pinpad</h2>
+          <p class="instructions-subtitle">Por favor, siga os passos abaixo para completar seu pagamento</p>
+        </div>
+
+        <div class="amount-display">
+          <div class="amount-label">Valor a pagar</div>
+          <div class="amount-value">{formatPrice(cart.total)}</div>
+        </div>
+
+        <div class="steps-container">
+          <div class="step active">
+            <div class="step-icon">
+              <i class="icon-power"></i>
+            </div>
+            <div class="step-content">
+              <h3 class="step-title">Pressione os Botões</h3>
+              <p class="step-description">
+                Pressione o botão vermelho e depois o verde para iniciar a operação
+              </p>
+              <div class="button-indicators">
+                <span class="button-indicator button-red">Vermelho</span>
+                <span class="button-indicator button-green">Verde</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-icon">
+              <i class="icon-credit-card"></i>
+            </div>
+            <div class="step-content">
+              <h3 class="step-title">Aproxime ou Insira seu Cartão</h3>
+              <p class="step-description">
+                Aproxime seu cartão do leitor ou insira o chip para iniciar o pagamento
+              </p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-icon">
+              <i class="icon-check-circle"></i>
+            </div>
+            <div class="step-content">
+              <h3 class="step-title">Aguarde a Confirmação</h3>
+              <p class="step-description">
+                Não remova o cartão até que a transação seja concluída
+              </p>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-icon">
+              <i class="icon-arrow-left"></i>
+            </div>
+            <div class="step-content">
+              <h3 class="step-title">Retire seu Cartão</h3>
+              <p class="step-description">
+                Retire seu cartão do Pinpad quando solicitado
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <button class="cancel-payment-button card-cancel-button" onclick={cancelPayment}>
+          <i class="icon-x"></i>
+          Cancelar Pagamento
+        </button>
+      </section>
+    {:else if paymentState === 'success'}
+      <section class="section payment-status active success-state">
+        <div class="success-animation">
+          <div class="success-circle">
+            <i class="icon-check-circle status-icon success"></i>
+          </div>
+        </div>
+        <div class="status-message">Pagamento Aprovado!</div>
         <div class="status-description">
           {paymentResult?.message || 'Seu pagamento foi processado com sucesso'}
         </div>
@@ -224,19 +447,39 @@
           <div class="receipt-info">
             <p><strong>Transação:</strong> {paymentResult.receipt.transactionId}</p>
             <p><strong>Total:</strong> {formatPrice(paymentResult.receipt.total)}</p>
+            <p><strong>Método:</strong> {paymentResult.receipt.paymentMethod}</p>
           </div>
         {/if}
       </section>
-    {:else if paymentStatus === 'failed'}
-      <section class="section payment-status active">
-        <i class="icon-x-circle status-icon error"></i>
-        <div class="status-message">Pagamento não processado</div>
-        <div class="status-description">
-          {paymentResult?.message || 'Ocorreu um erro ao processar o pagamento'}
+    {:else if paymentState === 'failed' || paymentState === 'retry'}
+      <section class="section payment-status active error-state">
+        <div class="error-animation">
+          <div class="error-circle">
+            <span class="status-icon error">×</span>
+          </div>
         </div>
-        <button class="retry-button" onclick={() => { paymentStatus = 'idle'; selectedPayment = ''; }}>
-          Tentar novamente
-        </button>
+        <div class="status-message">Pagamento Recusado</div>
+        <div class="status-description">
+          {paymentResult?.message || 'O pagamento não foi aprovado'}
+        </div>
+        
+        {#if paymentState === 'retry' && retryCount < maxRetries}
+          <div class="retry-options">
+            <button class="retry-button large-button" onclick={retryPayment}>
+              Tentar Novamente ({maxRetries - retryCount} tentativas restantes)
+            </button>
+            <button class="cancel-button large-button" onclick={() => goto('/')}>
+              Cancelar
+            </button>
+          </div>
+        {:else}
+          <div class="final-options">
+            <button class="return-button" onclick={() => goto('/')}>
+              Voltar ao Início
+            </button>
+            <p class="retry-exceeded">Limite de tentativas excedido. Tente novamente mais tarde.</p>
+          </div>
+        {/if}
       </section>
     {/if}
   </main>
@@ -269,11 +512,6 @@
     align-items: center;
   }
 
-  .status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
 
   .header-main {
     padding: 1rem 2rem;
@@ -294,10 +532,13 @@
     font-weight: 500;
     border-radius: var(--radius);
     transition: all 0.2s ease;
+    min-height: 44px;
+    font-size: 1rem;
   }
 
-  .back-button:hover {
+  .back-button:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.1);
+    transform: translateX(-2px);
   }
 
   .back-button:disabled {
@@ -337,22 +578,30 @@
   }
 
   .payment-methods {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 1rem;
+    max-width: 600px;
+    margin: 0 auto;
   }
 
   .payment-method {
     background: var(--background);
     border: 2px solid var(--border);
     border-radius: var(--radius);
-    padding: 1.5rem;
+    padding: 2rem;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: center;
+    gap: 1.5rem;
     width: 100%;
+    max-width: 500px;
+    min-height: 100px;
+    font-size: 1.4rem;
+    text-align: center;
   }
 
   .payment-method:hover {
@@ -375,16 +624,17 @@
 
   .payment-method-info {
     flex: 1;
-    text-align: left;
+    text-align: center;
   }
 
   .payment-method-name {
     font-weight: 600;
     margin-bottom: 0.25rem;
+    font-size: 1.4rem;
   }
 
   .payment-method-description {
-    font-size: 0.875rem;
+    font-size: 1.2rem;
     opacity: 0.8;
   }
 
@@ -546,6 +796,415 @@
     transform: translateY(-1px);
   }
 
+  .large-button {
+    padding: 1.25rem 2.5rem !important;
+    font-size: 1.125rem !important;
+    font-weight: 600 !important;
+    min-width: 200px;
+  }
+
+  /* New Payment State Animations */
+  .success-animation {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .success-circle {
+    width: 120px;
+    height: 120px;
+    background: var(--success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: successCircleAnimation 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  .success-circle .status-icon {
+    color: white;
+    animation: successIconAnimation 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  @keyframes successCircleAnimation {
+    0% {
+      transform: scale(0);
+      opacity: 1;
+    }
+    30% {
+      transform: scale(1.3);
+      opacity: 0.9;
+    }
+    60% {
+      transform: scale(0.9);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes successIconAnimation {
+    0% {
+      opacity: 0;
+      transform: scale(0);
+    }
+    60% {
+      opacity: 0;
+      transform: scale(0);
+    }
+    80% {
+      opacity: 1;
+      transform: scale(1.3);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .error-animation {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .error-circle {
+    width: 120px;
+    height: 120px;
+    background: var(--error);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: errorCircleAnimation 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  .error-circle .status-icon {
+    color: white;
+    font-size: 10rem;
+    line-height: 0.8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    top: -0.1em;
+    animation: errorIconAnimation 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  @keyframes errorCircleAnimation {
+    0% {
+      transform: scale(0);
+      opacity: 1;
+    }
+    30% {
+      transform: scale(1.3);
+      opacity: 0.9;
+    }
+    60% {
+      transform: scale(0.9);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes errorIconAnimation {
+    0% {
+      opacity: 0;
+      transform: scale(0) rotate(0deg);
+    }
+    60% {
+      opacity: 0;
+      transform: scale(0) rotate(0deg);
+    }
+    70% {
+      opacity: 1;
+      transform: scale(1.3) rotate(-10deg);
+    }
+    80% {
+      opacity: 1;
+      transform: scale(1.1) rotate(10deg);
+    }
+    90% {
+      opacity: 1;
+      transform: scale(1.05) rotate(-5deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
+  .card-animation {
+    animation: cardFloat 2s ease-in-out infinite;
+  }
+
+  @keyframes cardFloat {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    border-radius: 50%;
+  }
+
+  .status-dot.pulsing {
+    animation: pulse 1s infinite;
+  }
+
+  .cancel-payment-button,
+  .cancel-button,
+  .return-button {
+    margin-top: 1.5rem;
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .cancel-payment-button:hover,
+  .cancel-button:hover,
+  .return-button:hover {
+    background: var(--muted);
+    transform: translateY(-1px);
+  }
+
+  .retry-options {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin: 2rem auto 0;
+    max-width: 400px;
+    width: 100%;
+  }
+
+  .final-options {
+    text-align: center;
+    margin-top: 1.5rem;
+  }
+
+  .retry-exceeded {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    margin-top: 1rem;
+  }
+
+  .success-state .status-message {
+    color: var(--success);
+  }
+
+  .error-state .status-message {
+    color: var(--error);
+  }
+
+  /* Card Payment Screen Styles */
+  .card-payment-screen {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .instructions-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .instructions-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--foreground);
+  }
+
+  .instructions-subtitle {
+    font-size: 1.125rem;
+    color: var(--muted-foreground);
+  }
+
+  .amount-display {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--background);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--border);
+  }
+
+  .amount-label {
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  .amount-value {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--foreground);
+    line-height: 1.2;
+  }
+
+  .steps-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 600px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  .steps-container::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 48px;
+    bottom: 48px;
+    width: 2px;
+    background: var(--border);
+    z-index: 0;
+  }
+
+  .step {
+    display: flex;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: var(--background);
+    border-radius: var(--radius-lg);
+    transition: all 0.3s ease;
+    position: relative;
+  }
+
+  .step.active {
+    background: var(--card);
+    transform: translateX(0.5rem);
+    box-shadow: var(--shadow-md);
+  }
+
+  .step-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--muted);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 1;
+    border: 2px solid var(--border);
+    transition: all 0.3s ease;
+    font-size: 20px;
+  }
+
+  .step.active .step-icon {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+    animation: pulse-step 2s infinite;
+  }
+
+  @keyframes pulse-step {
+    0% {
+      box-shadow: 0 0 0 0 rgba(0, 129, 167, 0.4);
+    }
+    70% {
+      box-shadow: 0 0 0 10px rgba(0, 129, 167, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(0, 129, 167, 0);
+    }
+  }
+
+  .step-content {
+    flex: 1;
+  }
+
+  .step-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--foreground);
+    font-size: 1.125rem;
+  }
+
+  .step-description {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .button-indicators {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .button-indicator {
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .button-red {
+    background: rgba(239, 68, 68, 0.1);
+    color: rgb(239, 68, 68);
+  }
+
+  .button-green {
+    background: rgba(16, 185, 129, 0.1);
+    color: rgb(16, 185, 129);
+  }
+
+  .card-cancel-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem 2rem;
+    background: transparent;
+    border: 2px solid var(--border);
+    color: var(--error);
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 3rem auto 0;
+    max-width: 300px;
+    width: 100%;
+  }
+
+  .card-cancel-button:hover {
+    background: var(--error);
+    color: white;
+    border-color: var(--error);
+  }
+
   /* Responsive design */
   @media (max-width: 768px) {
     .header-top,
@@ -564,6 +1223,33 @@
 
     .payment-methods {
       grid-template-columns: 1fr;
+    }
+
+    /* Card payment screen responsive */
+    .instructions-header {
+      margin-bottom: 2rem;
+    }
+
+    .instructions-title {
+      font-size: 1.5rem;
+    }
+
+    .amount-display {
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .amount-value {
+      font-size: 2.5rem;
+    }
+
+    .step {
+      padding: 1rem;
+      gap: 1.5rem;
+    }
+
+    .steps-container::before {
+      left: 20px;
     }
   }
 
@@ -584,6 +1270,35 @@
     .item-price {
       align-self: flex-end;
     }
+
+    /* Card payment screen mobile */
+    .card-payment-screen {
+      padding: 1rem;
+    }
+
+    .amount-value {
+      font-size: 2rem;
+    }
+
+    .step {
+      padding: 1rem;
+      gap: 1rem;
+    }
+
+    .step-icon {
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+    }
+
+    .steps-container::before {
+      left: 18px;
+    }
+
+    .button-indicators {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
   }
 
   /* Icon classes */
@@ -596,4 +1311,6 @@
   .icon-loader-2::before { content: '⟳'; }
   .icon-check-circle::before { content: '✅'; }
   .icon-x-circle::before { content: '❌'; }
+  .icon-power::before { content: '🔌'; }
+  .icon-x::before { content: '✕'; }
 </style>

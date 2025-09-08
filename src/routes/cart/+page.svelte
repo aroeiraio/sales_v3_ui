@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { ArrowLeft, WifiOff, Minus, Plus, Trash2, ArrowRight, ShoppingCart } from 'lucide-svelte';
+	import { ArrowLeft, Minus, Plus, Trash2, ArrowRight, ShoppingCart } from 'lucide-svelte';
 	import { visualSettingsService } from '$lib/services/visualSettings';
-	import { offlineService } from '$lib/services/offline';
 	import { cartService, type Cart, type CartItem } from '$lib/services/cart';
+	import { errorDialogService } from '$lib/services/errorDialog';
+	import { sessionService } from '$lib/services/session';
 
 	let settings: any = $state(null);
-	let isOnline = $state(true);
 	let currentTime = $state('');
 	let cart: Cart = $state({
 		items: [],
@@ -24,17 +24,6 @@
 			console.error('Failed to load visual settings:', error);
 		}
 
-		// Initialize offline status
-		isOnline = offlineService.isOnlineStatus();
-		
-		// Listen for online/offline changes
-		const handleOnline = () => isOnline = true;
-		const handleOffline = () => isOnline = false;
-		
-		if (typeof window !== 'undefined') {
-			window.addEventListener('online', handleOnline);
-			window.addEventListener('offline', handleOffline);
-		}
 
 		// Update time every second
 		function updateTime() {
@@ -46,24 +35,18 @@
 
 		// Initialize cart and subscribe to changes
 		try {
-			cart = cartService.getCart();
-			
-			// Subscribe to cart updates
+			// Subscribe to cart updates first
 			unsubscribeCart = cartService.subscribe((updatedCart) => {
 				cart = updatedCart;
 			});
 
-			// Load cart from server if needed
-			await cartService.getCart();
+			// Load cart from server
+			cart = await cartService.getCart();
 		} catch (error) {
 			console.error('Failed to initialize cart:', error);
 		}
 
 		return () => {
-			if (typeof window !== 'undefined') {
-				window.removeEventListener('online', handleOnline);
-				window.removeEventListener('offline', handleOffline);
-			}
 			clearInterval(timeInterval);
 			if (unsubscribeCart) {
 				unsubscribeCart();
@@ -78,7 +61,7 @@
 	});
 
 	function goBack() {
-		window.history.back();
+		window.location.href = '/products';
 	}
 
 	function goToProducts() {
@@ -88,21 +71,90 @@
 	async function updateQuantity(productId: string, newQuantity: number) {
 		try {
 			await cartService.updateQuantity(productId, newQuantity);
+			// Refresh cart data to ensure UI is updated
+			cart = await cartService.getCart();
+			// Show success toast
+			showToast(newQuantity === 0 ? 'Item removido com sucesso!' : 'Quantidade atualizada com sucesso!');
 		} catch (error) {
 			console.error('Failed to update quantity:', error);
+			// Don't show additional dialog - cartService already handles error dialogs
+			// Just refresh cart to ensure UI is in sync
+			cart = await cartService.getCart();
 		}
 	}
 
 	async function removeItem(productId: string) {
 		try {
 			await cartService.removeItem(productId);
+			// Refresh cart data to ensure UI is updated
+			cart = await cartService.getCart();
+			// Show success toast
+			showToast('Item removido com sucesso!');
 		} catch (error) {
 			console.error('Failed to remove item:', error);
+			// Don't show additional dialog - cartService already handles error dialogs
+			// Just refresh cart to ensure UI is in sync
+			cart = await cartService.getCart();
 		}
 	}
 
 	function goToCheckout() {
 		window.location.href = '/checkout';
+	}
+
+	// Reset timeout on any user interaction
+	function handleUserInteraction() {
+		sessionService.resetTimeout();
+	}
+
+	function showToast(message: string, duration: number = 3000): void {
+		// Create toast element
+		const toast = document.createElement('div');
+		toast.className = 'toast-notification';
+		toast.textContent = message;
+		toast.style.cssText = `
+			position: fixed;
+			top: 80px;
+			right: 20px;
+			background: #10B981;
+			color: white;
+			padding: 1rem 1.5rem;
+			border-radius: 8px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+			z-index: 10001;
+			font-weight: 600;
+			font-size: 16px;
+			max-width: 320px;
+			word-wrap: break-word;
+			opacity: 0;
+			transform: translateX(100%);
+			transition: all 0.3s ease-out;
+			font-family: system-ui, -apple-system, sans-serif;
+			border: 2px solid rgba(255, 255, 255, 0.2);
+		`;
+
+		document.body.appendChild(toast);
+
+		// Trigger animation
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				toast.style.opacity = '1';
+				toast.style.transform = 'translateX(0)';
+			});
+		});
+
+		// Remove toast after specified duration
+		setTimeout(() => {
+			if (toast.parentNode) {
+				toast.style.opacity = '0';
+				toast.style.transform = 'translateX(100%)';
+				setTimeout(() => {
+					if (toast.parentNode) {
+						toast.parentNode.removeChild(toast);
+					}
+				}, 300);
+			}
+		}, duration);
 	}
 </script>
 
@@ -110,17 +162,12 @@
 	<title>Carrinho - InoBag</title>
 </svelte:head>
 
+<svelte:window onclick={handleUserInteraction} onkeydown={handleUserInteraction} />
+
 <div class="full-screen-container">
 	<header class="header">
 		<div class="header-top">
-			{#if !isOnline}
-				<div class="status-indicator">
-					<WifiOff size={16} />
-					<span>Modo Offline</span>
-				</div>
-			{:else}
-				<div></div>
-			{/if}
+			<div></div>
 			<div class="time">{currentTime}</div>
 		</div>
 		<div class="header-main">
@@ -133,86 +180,94 @@
 	</header>
 
 	<main class="main-content">
-		{#if cart.items.length > 0}
-			<div class="cart-items">
-				{#each cart.items as item (item.productId)}
-					<div class="cart-item">
-						<div class="item-image">
-							{#if item.image}
-								<img src={item.image} alt={item.name} />
-							{:else}
-								<div class="item-placeholder">
-									<ShoppingCart size={24} />
-								</div>
-							{/if}
-						</div>
-						<div class="item-details">
-							<div class="item-info">
-								<div class="item-name">{item.name}</div>
-								<div class="item-price">R$ {item.price.toFixed(2).replace('.', ',')}</div>
-							</div>
-							<div class="quantity-controls">
-								<button 
-									class="quantity-button" 
-									onclick={() => updateQuantity(item.productId, item.quantity - 1)}
-									disabled={item.quantity <= 1}
-								>
-									<Minus size={16} />
-								</button>
-								<span class="quantity-display">{item.quantity}</span>
-								<button 
-									class="quantity-button" 
-									onclick={() => updateQuantity(item.productId, item.quantity + 1)}
-									disabled={item.maxQuantity && item.quantity >= item.maxQuantity}
-								>
-									<Plus size={16} />
-								</button>
-							</div>
-							<button class="remove-button" onclick={() => removeItem(item.productId)}>
-								<Trash2 size={20} />
-							</button>
-						</div>
+		<div class="cart-container">
+			{#if cart.items.length > 0}
+				<div class="summary-section">
+					<h2 class="summary-title">Resumo do Pedido</h2>
+					<div class="summary-row">
+						<span>Itens ({cart.items.reduce((total, item) => total + item.quantity, 0)})</span>
+						<span>R$ {cart.subtotal.toFixed(2).replace('.', ',')}</span>
 					</div>
-				{/each}
-			</div>
+					{#if cart.serviceFee > 0}
+						<div class="summary-row">
+							<span>Taxa de serviço</span>
+							<span>R$ {cart.serviceFee.toFixed(2).replace('.', ',')}</span>
+						</div>
+					{/if}
+					{#if cart.discount > 0}
+						<div class="summary-row">
+							<span>Desconto</span>
+							<span>- R$ {cart.discount.toFixed(2).replace('.', ',')}</span>
+						</div>
+					{/if}
+					<div class="summary-row total">
+						<span>Total</span>
+						<span>R$ {cart.total.toFixed(2).replace('.', ',')}</span>
+					</div>
+					<button class="checkout-button" onclick={goToCheckout}>
+						Finalizar Pedido
+						<ArrowRight size={20} />
+					</button>
+					<button class="cancel-button" onclick={() => window.location.href = '/'}>
+						Cancelar
+					</button>
+				</div>
 
-			<aside class="summary-section">
-				<h2 class="summary-title">Resumo do Pedido</h2>
-				<div class="summary-row">
-					<span>Subtotal</span>
-					<span>R$ {cart.subtotal.toFixed(2).replace('.', ',')}</span>
+				<div class="cart-items">
+					<h2 class="section-title">Itens</h2>
+					{#each cart.items as item (item.itemId)}
+						<div class="cart-item">
+							<div class="item-image">
+								{#if item.media && item.media.length > 0 && (item.media[0].url || item.media[0].source)}
+									<img src={item.media[0].url || item.media[0].source} alt={item.name} />
+								{:else}
+									<div class="item-placeholder">
+										<ShoppingCart size={24} />
+									</div>
+								{/if}
+							</div>
+							<div class="item-details">
+								<div class="item-info">
+									<div class="item-name">{item.name}</div>
+									<div class="item-price">R$ {item.price.toFixed(2).replace('.', ',')}</div>
+								</div>
+								<div class="quantity-controls">
+									<button 
+										class="quantity-button" 
+										onclick={() => {
+											if (item.quantity === 1) {
+												removeItem(item.itemId.toString());
+											} else {
+												updateQuantity(item.itemId.toString(), item.quantity - 1);
+											}
+										}}
+									>
+										<Minus size={16} />
+									</button>
+									<span class="quantity-display">{item.quantity}</span>
+									<button 
+										class="quantity-button" 
+										onclick={() => updateQuantity(item.itemId.toString(), item.quantity + 1)}
+										disabled={item.saleLimit && item.quantity >= item.saleLimit}
+									>
+										<Plus size={16} />
+									</button>
+								</div>
+							</div>
+						</div>
+					{/each}
 				</div>
-				{#if cart.serviceFee > 0}
-					<div class="summary-row">
-						<span>Taxa de serviço</span>
-						<span>R$ {cart.serviceFee.toFixed(2).replace('.', ',')}</span>
-					</div>
-				{/if}
-				{#if cart.discount > 0}
-					<div class="summary-row">
-						<span>Desconto</span>
-						<span>- R$ {cart.discount.toFixed(2).replace('.', ',')}</span>
-					</div>
-				{/if}
-				<div class="summary-row total">
-					<span>Total</span>
-					<span>R$ {cart.total.toFixed(2).replace('.', ',')}</span>
+			{:else}
+				<div class="empty-cart">
+					<ShoppingCart size={64} />
+					<div class="empty-cart-text">Seu carrinho está vazio</div>
+					<button class="continue-shopping" onclick={goToProducts}>
+						<ArrowLeft size={20} />
+						Continuar Comprando
+					</button>
 				</div>
-				<button class="checkout-button" onclick={goToCheckout}>
-					Finalizar Pedido
-					<ArrowRight size={20} />
-				</button>
-			</aside>
-		{:else}
-			<div class="empty-cart">
-				<ShoppingCart size={64} />
-				<div class="empty-cart-text">Seu carrinho está vazio</div>
-				<button class="continue-shopping" onclick={goToProducts}>
-					<ArrowLeft size={20} />
-					Continuar Comprando
-				</button>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</main>
 </div>
 
@@ -244,12 +299,6 @@
 		align-items: center;
 	}
 
-	.status-indicator {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--bittersweet);
-	}
 
 	.header-main {
 		padding: 1rem 2rem;
@@ -276,6 +325,7 @@
 
 	.back-button:hover {
 		background: rgba(255, 255, 255, 0.1);
+		transform: translateX(-2px);
 	}
 
 	.page-title {
@@ -286,16 +336,31 @@
 	.main-content {
 		flex: 1;
 		display: flex;
-		gap: 2rem;
+		justify-content: center;
 		padding: 2rem;
-		max-width: 1400px;
-		margin: 0 auto;
-		width: 100%;
 		overflow-y: auto;
+		background: var(--background);
+	}
+
+	.cart-container {
+		width: 100%;
+		max-width: 800px;
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+	}
+
+	.section-title {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--foreground);
+		text-align: center;
+		margin-bottom: 1.5rem;
+		padding-bottom: 0.5rem;
+		border-bottom: 2px solid var(--primary);
 	}
 
 	.cart-items {
-		flex: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -406,36 +471,15 @@
 		color: var(--foreground);
 	}
 
-	.remove-button {
-		background: transparent;
-		border: none;
-		color: var(--destructive);
-		padding: 0.5rem;
-		cursor: pointer;
-		border-radius: var(--radius);
-		transition: all 0.2s ease;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 44px;
-		min-width: 44px;
-	}
-
-	.remove-button:hover {
-		background: var(--destructive);
-		color: white;
-	}
 
 	.summary-section {
-		width: 380px;
 		background: var(--card);
 		border-radius: var(--radius);
 		padding: 1.5rem;
 		border: 1px solid var(--border);
-		height: fit-content;
-		position: sticky;
-		top: calc(73px + 2rem); /* Header height + padding */
-		flex-shrink: 0;
+		width: 100%;
+		max-width: 800px;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.summary-title {
@@ -485,6 +529,32 @@
 	.checkout-button:hover {
 		transform: translateY(-2px);
 		box-shadow: var(--shadow-md);
+	}
+
+	.cancel-button {
+		background: transparent;
+		color: var(--muted-foreground);
+		border: 2px solid var(--border);
+		width: 100%;
+		padding: 1rem;
+		border-radius: var(--radius);
+		font-weight: 600;
+		font-size: 1.125rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		margin-top: 1rem;
+		min-height: var(--touch-target);
+	}
+
+	.cancel-button:hover {
+		background: var(--muted);
+		border-color: var(--muted-foreground);
+		transform: translateY(-2px);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.empty-cart {
@@ -542,7 +612,8 @@
 		}
 
 		.summary-section {
-			width: 420px;
+			width: 100%;
+			max-width: 800px;
 		}
 	}
 
@@ -569,7 +640,8 @@
 		}
 
 		.summary-section {
-			width: 480px;
+			width: 100%;
+			max-width: 800px;
 			padding: 2rem;
 		}
 
@@ -582,11 +654,10 @@
 	@media (max-width: 1024px) {
 		.main-content {
 			padding: 1.5rem;
-			gap: 1.5rem;
 		}
 
-		.summary-section {
-			width: 340px;
+		.cart-container {
+			max-width: 700px;
 		}
 	}
 
@@ -598,14 +669,12 @@
 		}
 
 		.main-content {
-			flex-direction: column;
 			padding: 1rem;
 		}
 
-		.summary-section {
-			width: 100%;
-			position: static;
-			order: -1;
+		.cart-container {
+			gap: 1.5rem;
+			max-width: 100%;
 		}
 
 		.cart-item {
@@ -653,6 +722,10 @@
 		.checkout-button {
 			font-size: 1rem;
 			padding: 0.875rem;
+		}
+
+		.section-title {
+			font-size: 1.25rem;
 		}
 	}
 </style>

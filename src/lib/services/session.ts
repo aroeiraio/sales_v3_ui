@@ -16,13 +16,16 @@ class SessionService {
   async startSession(): Promise<Session> {
     try {
       console.log('Starting session - calling GET', `${API_BASE_URL}${ENDPOINTS.session}`);
-      // Call the session endpoint with GET method as per API specification
+      // Call the session endpoint with GET method to create a new session
       const apiResponse = await get<any>(ENDPOINTS.session);
       console.log('API response:', apiResponse);
       
       // Map API response to Session interface
+      // The API returns: { "id": "...", "message": "Nova sessão inicializada", "msg_code": "CART_SESSION_OPENED" }
+      const sessionId = apiResponse?.id || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       const session: Session = {
-        sessionId: apiResponse.id || `session-${Date.now()}`,
+        sessionId,
         expiresAt: new Date(Date.now() + this.TIMEOUT_DURATION).toISOString(),
         isActive: true
       };
@@ -53,16 +56,13 @@ class SessionService {
 
   async endSession(): Promise<void> {
     try {
-      if (this.session) {
-        console.log('Ending session - calling DELETE', `${API_BASE_URL}${ENDPOINTS.session}`);
-        // Call the session endpoint to end the session as per API specification
-        await del(ENDPOINTS.session);
-        console.log('Session ended successfully');
-      } else {
-        console.log('No active session to end');
-      }
+      console.log('Ending session - calling DELETE', `${API_BASE_URL}${ENDPOINTS.session}`);
+      // Always call the session endpoint to end any existing session on the server
+      await del(ENDPOINTS.session);
+      console.log('Session ended successfully');
     } catch (error) {
       console.error('Failed to end session:', error);
+      // Don't throw the error - we want to proceed even if there was no session to end
     } finally {
       this.session = null;
       this.clearTimeout();
@@ -74,6 +74,12 @@ class SessionService {
     this.timeoutId = setTimeout(() => {
       this.handleTimeout();
     }, this.TIMEOUT_DURATION);
+  }
+
+  resetTimeout(): void {
+    if (this.session && this.session.isActive) {
+      this.startTimeout();
+    }
   }
 
   private clearTimeout(): void {

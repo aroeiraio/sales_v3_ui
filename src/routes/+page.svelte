@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ShoppingCart, WifiOff } from 'lucide-svelte';
+	import { ShoppingCart } from 'lucide-svelte';
 	import { 
 		visualSettings, 
 		visualSettingsActions, 
@@ -22,10 +22,18 @@
 	import { sessionService } from '$lib/services/session';
 	import { appState } from '$lib/stores/app';
 
-	let videoElement: HTMLVideoElement;
+	let videoElement = $state<HTMLVideoElement>();
 	let isMuted = $state(true);
 
 	onMount(async () => {
+		// Destroy any existing session when first screen loads
+		try {
+			console.log('Ending any existing session on first screen load');
+			await sessionService.endSession();
+		} catch (error) {
+			console.log('No session to end or error ending session:', error);
+		}
+
 		// Load visual settings and digital signage data
 		await Promise.all([
 			visualSettingsActions.loadSettings(),
@@ -60,19 +68,22 @@
 
 	async function startShopping() {
 		try {
+			console.log('Starting shopping - calling sessionService.startSession()');
 			// Stop any video playback
 			digitalSignageActions.stopPlayback();
 			
 			// Start session and navigate
 			await sessionService.startSession();
+			console.log('Session started successfully, navigating to products');
 			window.location.href = '/products';
 		} catch (error) {
+			console.error('Error in startShopping:', error);
 			// Error is handled by sessionService
 		}
 	}
 
-	function handleVideoClick() {
-		digitalSignageActions.onVideoClick();
+	async function handleVideoClick() {
+		await digitalSignageActions.onVideoClick();
 	}
 
 	function handleVideoEnded() {
@@ -130,14 +141,7 @@
 	{:else}
 		<!-- Regular Start Screen -->
 		<div class="status-bar">
-			{#if !$appState.isOnline}
-				<div class="offline-indicator">
-					<WifiOff size={16} />
-					<span>Modo Offline</span>
-				</div>
-			{:else}
-				<div></div>
-			{/if}
+			<div></div>
 			<div class="time">{$appState.currentTime.toLocaleTimeString('pt-BR')}</div>
 		</div>
 
@@ -262,12 +266,6 @@
 		flex-shrink: 0;
 	}
 
-	.offline-indicator {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--bittersweet);
-	}
 
 	.main-content {
 		flex: 1;

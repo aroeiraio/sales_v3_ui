@@ -45,7 +45,7 @@ class CartService {
 
   async getCart(): Promise<Cart> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart');
+      const response = await fetch('http://localhost:8090/interface/cart/');
       
       if (response.status === 404) {
         // Empty cart - return default empty cart
@@ -87,6 +87,7 @@ class CartService {
   }
 
   async addItem(itemId: number, type: string = 'product', retryCount: number = 0): Promise<void> {
+    console.log('🚀 addItem called with:', { itemId, type, retryCount });
     try {
       const response = await fetch('http://localhost:8090/interface/cart/', {
         method: 'POST',
@@ -100,7 +101,13 @@ class CartService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        let errorData: any = {};
+        try {
+          errorData = await response.json();
+        } catch (jsonError) {
+          console.log('Failed to parse error response as JSON:', jsonError);
+          errorData = {};
+        }
         
         // Handle specific error cases
         if (response.status === 404) {
@@ -189,9 +196,12 @@ class CartService {
             }
           } else {
             // Cart doesn't exist yet, but item was added - this is normal
-            console.log('Cart created with new item');
+            console.log('🛒 Cart created with new item (404 without error data)');
             // Refresh cart data to get the updated cart
             await this.getCart();
+            // Show success toast for cart creation
+            console.log('🍞 About to show toast for new cart creation');
+            this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
             return;
           }
         }
@@ -199,11 +209,23 @@ class CartService {
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      console.log('Add item API response:', data);
+      let data: any = {};
+      try {
+        data = await response.json();
+        console.log('Add item API response:', data);
+        console.log('🔍 Successfully parsed response, proceeding to check for errors...');
+      } catch (jsonError) {
+        console.log('Failed to parse success response as JSON:', jsonError);
+        // Refresh cart and show default success message
+        await this.getCart();
+        this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
+        return;
+      }
       
       // Check for specific error codes
+      console.log('🔍 Checking for errors in response data...');
       if (data.error) {
+        console.log('❌ Found error in response:', data.error);
         switch (data.error.code) {
           case 'STOCK_UNAVAILABLE':
             console.log('Showing stock error dialog');
@@ -295,25 +317,34 @@ class CartService {
       }
 
       // Update local cart state
+      console.log('🔍 No errors found, updating cart state...');
       if (data.cart) {
+        console.log('🛒 Updating cart from data.cart');
         this.cart = this.transformApiResponseToCart(data.cart);
       } else if (Array.isArray(data)) {
+        console.log('🛒 Updating cart from array data');
         this.cart = this.transformApiResponseToCart(data);
       } else {
         // Fallback: refresh cart data
+        console.log('🛒 Fallback: refreshing cart data and returning early');
         await this.getCart();
+        this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
         return;
       }
       console.log('Cart updated after adding item:', this.cart);
       this.notifySubscribers();
 
       // Show success toast for 3 seconds
+      console.log('🍞 About to show success toast. Data:', data);
       if (data.message && data.msg_code === 'CART_ADDED_ITEM') {
+        console.log('🍞 Showing toast with API message (CART_ADDED_ITEM)');
         this.showToast(data.message, 3000);
       } else if (data.message) {
+        console.log('🍞 Showing toast with API message');
         this.showToast(data.message, 3000);
       } else {
         // Fallback success message
+        console.log('🍞 Showing fallback success message');
         this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
       }
 
@@ -346,15 +377,16 @@ class CartService {
     }
   }
 
-  async removeItem(productId: string): Promise<void> {
+  async removeItem(itemId: string): Promise<void> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart', {
+      const response = await fetch('http://localhost:8090/interface/cart/', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          productId
+          type: 'product',
+          itemId: parseInt(itemId)
         })
       });
 
@@ -370,19 +402,13 @@ class CartService {
       }
       this.notifySubscribers();
 
-      // Show success feedback
-      errorDialogService.showInfo({
-        title: 'Item Removido',
-        message: 'Produto removido do carrinho.',
-        autoClose: true,
-        autoCloseDelay: 2000
-      });
+      // Success feedback will be handled by the calling component
 
     } catch (error) {
       console.error('Failed to remove item from cart:', error);
       
       if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorDialogService.showNetworkError(() => this.removeItem(productId));
+        errorDialogService.showNetworkError(() => this.removeItem(itemId));
       } else {
         errorDialogService.showError({
           title: 'Erro ao Remover Item',
@@ -390,7 +416,7 @@ class CartService {
           actions: [
             {
               label: 'Tentar Novamente',
-              action: () => this.removeItem(productId),
+              action: () => this.removeItem(itemId),
               variant: 'primary'
             }
           ]
@@ -399,58 +425,41 @@ class CartService {
     }
   }
 
-  async updateQuantity(productId: string, newQuantity: number): Promise<void> {
+  async updateQuantity(itemId: string, newQuantity: number): Promise<void> {
     try {
       if (newQuantity <= 0) {
-        await this.removeItem(productId);
+        await this.removeItem(itemId);
         return;
       }
 
-      const response = await fetch('http://localhost:8090/interface/cart', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          productId,
-          quantity: newQuantity
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        
-        if (errorData.error?.code === 'MAX_QUANTITY_EXCEEDED') {
-          errorDialogService.showError({
-            title: 'Quantidade Máxima Atingida',
-            message: `Você pode adicionar no máximo ${errorData.error.maxQuantity} unidades deste produto.`,
-            actions: [
-              {
-                label: 'OK',
-                action: () => {},
-                variant: 'primary'
-              }
-            ]
-          });
-          return;
+      // Since API doesn't provide UPDATE, we use ADD operation
+      // Find current quantity in cart
+      const currentItem = this.cart.items.find(item => item.itemId.toString() === itemId);
+      const currentQuantity = currentItem ? currentItem.quantity : 0;
+      
+      if (newQuantity === currentQuantity) {
+        return; // No change needed
+      }
+      
+      if (newQuantity > currentQuantity) {
+        // Add more items
+        const itemsToAdd = newQuantity - currentQuantity;
+        for (let i = 0; i < itemsToAdd; i++) {
+          await this.addItem(parseInt(itemId), 'product');
         }
-        
-        throw new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+      } else {
+        // Remove items one by one
+        const itemsToRemove = currentQuantity - newQuantity;
+        for (let i = 0; i < itemsToRemove; i++) {
+          await this.removeItem(itemId);
+        }
       }
-
-      const data = await response.json();
-      if (data.cart) {
-        this.cart = this.transformApiResponseToCart(data.cart);
-      } else if (Array.isArray(data)) {
-        this.cart = this.transformApiResponseToCart(data);
-      }
-      this.notifySubscribers();
 
     } catch (error) {
       console.error('Failed to update quantity:', error);
       
       if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorDialogService.showNetworkError(() => this.updateQuantity(productId, newQuantity));
+        errorDialogService.showNetworkError(() => this.updateQuantity(itemId, newQuantity));
       } else {
         errorDialogService.showError({
           title: 'Erro ao Atualizar Quantidade',
@@ -458,7 +467,7 @@ class CartService {
           actions: [
             {
               label: 'Tentar Novamente',
-              action: () => this.updateQuantity(productId, newQuantity),
+              action: () => this.updateQuantity(itemId, newQuantity),
               variant: 'primary'
             }
           ]
@@ -467,9 +476,9 @@ class CartService {
     }
   }
 
-  async clearCart(): Promise<void> {
+  async clearCart(showErrorDialog: boolean = true): Promise<void> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart', {
+      const response = await fetch('http://localhost:8090/interface/cart/', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -491,17 +500,20 @@ class CartService {
 
     } catch (error) {
       console.error('Failed to clear cart:', error);
-      errorDialogService.showError({
-        title: 'Erro ao Limpar Carrinho',
-        message: 'Não foi possível limpar o carrinho. Tente novamente.',
-        actions: [
-          {
-            label: 'Tentar Novamente',
-            action: () => this.clearCart(),
-            variant: 'primary'
-          }
-        ]
-      });
+      if (showErrorDialog) {
+        errorDialogService.showError({
+          title: 'Erro ao Limpar Carrinho',
+          message: 'Não foi possível limpar o carrinho. Tente novamente.',
+          actions: [
+            {
+              label: 'Tentar Novamente',
+              action: () => this.clearCart(),
+              variant: 'primary'
+            }
+          ]
+        });
+      }
+      throw error;
     }
   }
 
@@ -517,6 +529,11 @@ class CartService {
   }
 
   getCartItems(): CartItem[] {
+    console.log('CartService getCartItems() called:', {
+      hasCart: !!this.cart,
+      cartItems: this.cart?.items || null,
+      itemCount: this.cart?.items?.length || 0
+    });
     return this.cart?.items ? [...this.cart.items] : [];
   }
 
@@ -564,7 +581,7 @@ class CartService {
   }
 
   private showToast(message: string, duration: number = 3000): void {
-    console.log('Showing toast:', message, 'for', duration, 'ms');
+    console.log('🍞 showToast called with message:', message, 'duration:', duration, 'ms');
     
     // Create toast element
     const toast = document.createElement('div');
@@ -572,40 +589,46 @@ class CartService {
     toast.textContent = message;
     toast.style.cssText = `
       position: fixed;
-      top: 20px;
+      top: 80px;
       right: 20px;
       background: #10B981;
       color: white;
       padding: 1rem 1.5rem;
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      z-index: 10000;
-      font-weight: 500;
-      font-size: 14px;
-      max-width: 300px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 10001;
+      font-weight: 600;
+      font-size: 16px;
+      max-width: 320px;
       word-wrap: break-word;
       opacity: 0;
       transform: translateX(100%);
       transition: all 0.3s ease-out;
+      font-family: system-ui, -apple-system, sans-serif;
+      border: 2px solid rgba(255, 255, 255, 0.2);
     `;
 
     document.body.appendChild(toast);
 
     // Trigger animation
     requestAnimationFrame(() => {
-      toast.style.opacity = '1';
-      toast.style.transform = 'translateX(0)';
+      requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(0)';
+      });
     });
 
     // Remove toast after specified duration
     setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.parentNode.removeChild(toast);
-        }
-      }, 300);
+      if (toast.parentNode) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+        }, 300);
+      }
     }, duration);
   }
 

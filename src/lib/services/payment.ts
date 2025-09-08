@@ -280,8 +280,11 @@ class PaymentService {
             transactionId: status.transactionId,
             amount: status.amount
           });
-          // Clear cart on successful payment
-          cartService.clearCart();
+          // Clear cart on successful payment (non-blocking, no error dialog)
+          cartService.clearCart(false).catch(error => {
+            console.warn('Cart clearing failed after successful payment:', error);
+            // Don't show error dialog for cart clearing failures after successful payment
+          });
         }
         break;
       

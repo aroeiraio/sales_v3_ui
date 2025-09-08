@@ -94,10 +94,10 @@
             }
           };
           
-          // Redirect to success page after showing result
+          // Redirect to end screen after showing result for 4 seconds
           setTimeout(() => {
-            goto('/');
-          }, 3000);
+            goto('/end');
+          }, 4000);
         } else if (newState === 'failed') {
           // Handle failed payment
           paymentResult = {
@@ -215,6 +215,42 @@
     sessionService.resetTimeout();
   }
 
+  // Debug functions for testing payment states
+  function simulateSuccessPayment() {
+    paymentState = 'success';
+    paymentResult = {
+      transactionId: `debug-success-${Date.now()}`,
+      status: 'success',
+      message: 'Pagamento aprovado com sucesso!',
+      receipt: {
+        transactionId: `debug-success-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        items: cart.items?.map((item: any) => ({
+          name: item.title || item.name,
+          quantity: item.quantity,
+          price: item.price
+        })) || [],
+        total: cart.total,
+        paymentMethod: selectedPayment
+      }
+    };
+
+    // Redirect to end screen after 4 seconds
+    setTimeout(() => {
+      goto('/end');
+    }, 4000);
+  }
+
+  function simulateRefusedPayment() {
+    retryCount = 0; // Reset retry count
+    paymentState = 'retry';
+    paymentResult = {
+      transactionId: `debug-refused-${Date.now()}`,
+      status: 'failed',
+      message: ''
+    };
+  }
+
   // Convert API payment methods to UI format
   function getDisplayPaymentMethods() {
     const displayMethods = [];
@@ -306,6 +342,22 @@
             <p>Carregando métodos de pagamento...</p>
           </div>
         {/if}
+
+        <!-- Debug buttons for testing payment states -->
+        <div class="debug-section">
+          <h3 class="debug-title">🧪 Debug - Testar Estados</h3>
+          <div class="debug-buttons">
+            <button class="debug-button success" onclick={simulateSuccessPayment}>
+              ✅ Simular Aprovado
+            </button>
+            <button class="debug-button refused" onclick={simulateRefusedPayment}>
+              ❌ Simular Recusado
+            </button>
+            <button class="debug-button end" onclick={() => goto('/end')}>
+              🏁 Ver Tela Final
+            </button>
+          </div>
+        </div>
       </section>
 
       <section class="section">
@@ -434,15 +486,15 @@
       </section>
     {:else if paymentState === 'success'}
       <section class="section payment-status active success-state">
-        <div class="success-animation">
-          <div class="success-circle">
-            <i class="icon-check-circle status-icon success"></i>
+        <div class="success-content-center">
+          <div class="success-animation">
+            <div class="success-circle">
+              <span class="status-icon success">✓</span>
+            </div>
           </div>
+          <div class="status-message">Pagamento Aprovado!</div>
         </div>
-        <div class="status-message">Pagamento Aprovado!</div>
-        <div class="status-description">
-          {paymentResult?.message || 'Seu pagamento foi processado com sucesso'}
-        </div>
+        
         {#if paymentResult?.receipt}
           <div class="receipt-info">
             <p><strong>Transação:</strong> {paymentResult.receipt.transactionId}</p>
@@ -453,20 +505,19 @@
       </section>
     {:else if paymentState === 'failed' || paymentState === 'retry'}
       <section class="section payment-status active error-state">
-        <div class="error-animation">
-          <div class="error-circle">
-            <span class="status-icon error">×</span>
+        <div class="error-content-center">
+          <div class="error-animation">
+            <div class="error-circle">
+              <span class="status-icon error">!</span>
+            </div>
           </div>
-        </div>
-        <div class="status-message">Pagamento Recusado</div>
-        <div class="status-description">
-          {paymentResult?.message || 'O pagamento não foi aprovado'}
+          <div class="status-message">Pagamento Recusado</div>
         </div>
         
         {#if paymentState === 'retry' && retryCount < maxRetries}
           <div class="retry-options">
             <button class="retry-button large-button" onclick={retryPayment}>
-              Tentar Novamente ({maxRetries - retryCount} tentativas restantes)
+              Tentar Novamente
             </button>
             <button class="cancel-button large-button" onclick={() => goto('/')}>
               Cancelar
@@ -561,6 +612,12 @@
     flex-direction: column;
     gap: 2rem;
     overflow-y: auto;
+  }
+
+  .main-content:has(.payment-status) {
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
   }
 
   .section {
@@ -692,6 +749,13 @@
   .payment-status {
     text-align: center;
     padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 55vh;
+    width: 100%;
+    max-width: 800px;
   }
 
   .status-icon {
@@ -719,9 +783,9 @@
   }
 
   .status-message {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
     color: var(--foreground);
   }
 
@@ -797,10 +861,12 @@
   }
 
   .large-button {
-    padding: 1.25rem 2.5rem !important;
-    font-size: 1.125rem !important;
+    padding: 1.5rem 3rem !important;
+    font-size: 1.25rem !important;
     font-weight: 600 !important;
-    min-width: 200px;
+    min-width: 280px;
+    width: 280px;
+    margin: 0.75rem 0;
   }
 
   /* New Payment State Animations */
@@ -811,8 +877,8 @@
   }
 
   .success-circle {
-    width: 120px;
-    height: 120px;
+    width: 180px;
+    height: 180px;
     background: var(--success);
     border-radius: 50%;
     display: flex;
@@ -823,6 +889,15 @@
 
   .success-circle .status-icon {
     color: white;
+    font-size: 12rem;
+    line-height: 0.8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    top: -0.1em;
     animation: successIconAnimation 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 
@@ -871,8 +946,8 @@
   }
 
   .error-circle {
-    width: 120px;
-    height: 120px;
+    width: 180px;
+    height: 180px;
     background: var(--error);
     border-radius: 50%;
     display: flex;
@@ -883,7 +958,7 @@
 
   .error-circle .status-icon {
     color: white;
-    font-size: 10rem;
+    font-size: 12rem;
     line-height: 0.8;
     display: flex;
     align-items: center;
@@ -1019,8 +1094,24 @@
     color: var(--success);
   }
 
+  .success-content-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 3rem;
+  }
+
   .error-state .status-message {
     color: var(--error);
+  }
+
+  .error-content-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 3rem;
   }
 
   /* Card Payment Screen Styles */
@@ -1313,4 +1404,71 @@
   .icon-x-circle::before { content: '❌'; }
   .icon-power::before { content: '🔌'; }
   .icon-x::before { content: '✕'; }
+
+  /* Debug buttons styles */
+  .debug-section {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: rgba(255, 193, 7, 0.1);
+    border: 2px dashed #ffc107;
+    border-radius: var(--radius, 0.5rem);
+  }
+
+  .debug-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #856404;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  .debug-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .debug-button {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius, 0.5rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    font-size: 0.875rem;
+  }
+
+  .debug-button.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+
+  .debug-button.success:hover {
+    background: #c3e6cb;
+    transform: translateY(-1px);
+  }
+
+  .debug-button.refused {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+
+  .debug-button.refused:hover {
+    background: #f5c6cb;
+    transform: translateY(-1px);
+  }
+
+  .debug-button.end {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+  }
+
+  .debug-button.end:hover {
+    background: #bee5eb;
+    transform: translateY(-1px);
+  }
 </style>

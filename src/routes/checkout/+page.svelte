@@ -25,6 +25,7 @@
   let deliverySteps: DeliveryStep[] = [];
   let countdownTimer: number = 60;
   let qrCodeCountdownInterval: NodeJS.Timeout | null = null;
+  let showInstructionsPopup: boolean = false;
 
   const paymentMethods = paymentService.getPaymentMethods();
 
@@ -416,10 +417,12 @@
       <div class="time">{currentTime}</div>
     </div>
     <div class="header-main">
-      <button class="back-button" onclick={goBack} disabled={isProcessing}>
-        <ArrowLeft size={20} />
-        Voltar
-      </button>
+      {#if paymentState === 'idle' || paymentState === 'retry' || paymentState === 'payment_timeout'}
+        <button class="back-button" onclick={goBack} disabled={isProcessing}>
+          <ArrowLeft size={28} />
+          <span class="back-text">Voltar</span>
+        </button>
+      {/if}
       <h1 class="page-title">Pagamento</h1>
     </div>
   </header>
@@ -520,15 +523,11 @@
     {:else if paymentState === 'processing'}
       <section class="section payment-status active processing-screen">
         <div class="processing-header">
-          <div class="status-icon-container">
-            <div class="loader-spinner"></div>
-          </div>
           {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
             <div class="status-message">Preparando PIX</div>
             <div class="status-description">Gerando QR Code para pagamento instantâneo</div>
           {:else}
             <div class="status-message">Processando pagamento</div>
-            <div class="status-description">Por favor, aguarde enquanto processamos seu pagamento</div>
           {/if}
         </div>
 
@@ -616,29 +615,14 @@
         </div>
 
         <div class="processing-footer">
-          {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
-            <p class="processing-note">
-              <i class="icon-info"></i>
-              Aguarde enquanto geramos seu QR Code PIX
-            </p>
-          {:else}
-            <p class="processing-note">
-              <i class="icon-info"></i>
-              Não feche esta janela até a conclusão do pagamento
-            </p>
-          {/if}
-          <button class="cancel-payment-button" onclick={cancelPayment}>
-            <i class="icon-x"></i>
-            Cancelar pagamento
+          <button class="cart-style-cancel-button" onclick={cancelPayment}>
+            Cancelar
           </button>
         </div>
       </section>
     {:else if paymentState === 'show_qrcode'}
       <section class="section payment-status active qr-code-screen">
         <div class="qr-header">
-          <div class="status-icon-container">
-            <div class="loader-spinner"></div>
-          </div>
           <div class="status-message">Escaneie o QR Code</div>
           <div class="status-description">Use seu celular para escanear o código PIX</div>
         </div>
@@ -666,33 +650,9 @@
         </div>
 
         <div class="qr-instructions">
-          <h3 class="instructions-title">Como pagar</h3>
-          <div class="instruction-grid">
-            <div class="instruction-step">
-              <div class="step-number">1</div>
-              <div class="step-text">Abra o aplicativo do seu banco</div>
-            </div>
-            <div class="instruction-step">
-              <div class="step-number">2</div>
-              <div class="step-text">Escolha a opção "Pagar com PIX"</div>
-            </div>
-            <div class="instruction-step">
-              <div class="step-number">3</div>
-              <div class="step-text">Escaneie o QR Code exibido na tela</div>
-            </div>
-            <div class="instruction-step">
-              <div class="step-number">4</div>
-              <div class="step-text">Confirme as informações e valor</div>
-            </div>
-            <div class="instruction-step">
-              <div class="step-number">5</div>
-              <div class="step-text">Aguarde a confirmação do pagamento</div>
-            </div>
-            <div class="instruction-step">
-              <div class="step-number">6</div>
-              <div class="step-text">Aguarde a liberação dos itens</div>
-            </div>
-          </div>
+          <button class="instructions-button" onclick={() => showInstructionsPopup = true}>
+            Como pagar
+          </button>
         </div>
 
         <div class="qr-footer">
@@ -726,9 +686,8 @@
             <i class="icon-info"></i>
             Complete o pagamento antes que o tempo expire
           </p>
-          <button class="cancel-payment-button" onclick={cancelPayment}>
-            <i class="icon-x"></i>
-            Cancelar pagamento
+          <button class="cart-style-cancel-button" onclick={cancelPayment}>
+            Cancelar
           </button>
         </div>
       </section>
@@ -746,10 +705,10 @@
         </div>
 
         <div class="timeout-actions">
-          <button class="retry-button large-button" onclick={() => location.reload()}>
+          <button class="cart-style-checkout-button" onclick={() => location.reload()}>
             Tentar novamente
           </button>
-          <button class="cancel-button large-button" onclick={() => goto('/')}>
+          <button class="cart-style-cancel-button" onclick={() => goto('/')}>
             Cancelar
           </button>
         </div>
@@ -829,10 +788,12 @@
       <section class="section payment-status active success-state">
         <div class="status-card">
           <div class="status-icon-container">
-            <i class="icon-package status-icon pulsing"></i>
+            <div class="success-checkmark">
+              <div class="checkmark-circle-success"></div>
+              <div class="checkmark-icon-success">✓</div>
+            </div>
           </div>
           <div class="status-badge success">
-            <i class="icon-check"></i>
             Pagamento Aprovado
           </div>
           <h2 class="status-title">Preparando seus produtos</h2>
@@ -882,10 +843,10 @@
         
         {#if paymentState === 'retry' && retryCount < maxRetries}
           <div class="retry-options">
-            <button class="retry-button large-button" onclick={retryPayment}>
+            <button class="cart-style-checkout-button" onclick={retryPayment}>
               Tentar Novamente
             </button>
-            <button class="cancel-button large-button" onclick={() => goto('/')}>
+            <button class="cart-style-cancel-button" onclick={() => goto('/')}>
               Cancelar
             </button>
           </div>
@@ -901,6 +862,48 @@
     {/if}
   </main>
 </div>
+
+<!-- Instructions Popup -->
+{#if showInstructionsPopup}
+  <div class="popup-overlay" onclick={() => showInstructionsPopup = false}>
+    <div class="popup-content" onclick={(e) => e.stopPropagation()}>
+      <div class="popup-header">
+        <h3 class="popup-title">Como pagar com PIX</h3>
+        <button class="popup-close" onclick={() => showInstructionsPopup = false}>
+          <i class="icon-x"></i>
+        </button>
+      </div>
+      <div class="popup-body">
+        <div class="instruction-grid">
+          <div class="instruction-step">
+            <div class="step-number">1</div>
+            <div class="step-text">Abra o aplicativo do seu banco</div>
+          </div>
+          <div class="instruction-step">
+            <div class="step-number">2</div>
+            <div class="step-text">Escolha a opção "Pagar com PIX"</div>
+          </div>
+          <div class="instruction-step">
+            <div class="step-number">3</div>
+            <div class="step-text">Escaneie o QR Code exibido na tela</div>
+          </div>
+          <div class="instruction-step">
+            <div class="step-number">4</div>
+            <div class="step-text">Confirme as informações e valor</div>
+          </div>
+          <div class="instruction-step">
+            <div class="step-number">5</div>
+            <div class="step-text">Aguarde a confirmação do pagamento</div>
+          </div>
+          <div class="instruction-step">
+            <div class="step-number">6</div>
+            <div class="step-text">Aguarde a liberação dos itens</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .checkout-container {
@@ -943,7 +946,7 @@
     color: var(--primary-foreground);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     padding: 0.5rem;
     cursor: pointer;
     font-weight: 500;
@@ -951,6 +954,10 @@
     transition: all 0.2s ease;
     min-height: 44px;
     font-size: 1rem;
+  }
+
+  .back-text {
+    font-size: 0.875rem;
   }
 
   .back-button:hover:not(:disabled) {
@@ -983,7 +990,9 @@
   .main-content:has(.payment-status) {
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
+    height: calc(100vh - 120px);
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
   }
 
   .section {
@@ -1119,9 +1128,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    min-height: 55vh;
+    height: fit-content;
+    max-height: calc(100vh - 160px);
     width: 100%;
     max-width: 800px;
+    overflow-y: auto;
   }
 
   .status-icon {
@@ -1223,10 +1234,17 @@
     color: var(--primary-foreground);
     border: none;
     border-radius: var(--radius);
+    min-width: 300px;
+    width: 100%;
+    max-width: 400px;
     padding: 0.75rem 1.5rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
   }
 
   .retry-button:hover {
@@ -1535,8 +1553,10 @@
   }
 
   .status-badge.success {
-    background: rgba(16, 185, 129, 0.1);
+    background: transparent;
     color: var(--success, #10B981);
+    font-size: 1.75rem;
+    border: none;
   }
 
   .status-title {
@@ -1609,6 +1629,10 @@
   .card-payment-screen {
     max-width: 800px;
     margin: 0 auto;
+    padding: 1.5rem;
+    height: fit-content;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
   }
 
   .instructions-header {
@@ -1887,10 +1911,13 @@
   .processing-screen {
     max-width: 800px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 1.5rem;
+    height: fit-content;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
   }
 
   .processing-header {
@@ -2236,11 +2263,14 @@
   .qr-code-screen {
     max-width: 800px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 1.5rem;
     text-align: center;
+    height: fit-content;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
   }
 
   .qr-header {
@@ -2260,8 +2290,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 300px;
-    min-width: 300px;
+    height: 280px;
+    width: 280px;
+    margin: 0 auto;
   }
 
   .qr-code-image {
@@ -2335,6 +2366,10 @@
 
   .qr-footer {
     margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 
   .countdown-container {
@@ -2383,13 +2418,15 @@
   .timeout-screen {
     max-width: 600px;
     margin: 0 auto;
-    padding: 3rem 2rem;
+    padding: 2rem;
     display: flex;
     flex-direction: column;
-    gap: 3rem;
+    gap: 2rem;
     text-align: center;
-    min-height: 60vh;
+    height: fit-content;
+    max-height: calc(100vh - 160px);
     justify-content: center;
+    overflow-y: auto;
   }
 
   .timeout-content {
@@ -2558,5 +2595,255 @@
   .debug-button.end:hover {
     background: #bee5eb;
     transform: translateY(-1px);
+  }
+
+  /* Cart-style buttons */
+  .cart-style-checkout-button {
+    background: var(--bittersweet);
+    color: white;
+    border: none;
+    width: 100%;
+    padding: 1rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 1.125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    min-height: var(--touch-target);
+  }
+
+  .cart-style-checkout-button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .cart-style-cancel-button {
+    background: transparent;
+    color: #64748b;
+    border: 2px solid var(--border);
+    min-width: 300px;
+    width: 100%;
+    max-width: 400px;
+    padding: 1rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 1.125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    min-height: var(--touch-target);
+  }
+
+  .cart-style-cancel-button:hover {
+    background: var(--muted);
+    border-color: var(--muted-foreground);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Instructions button */
+  .instructions-button {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border: none;
+    min-width: 300px;
+    width: 100%;
+    max-width: 400px;
+    padding: 1rem 2rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 1.125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .instructions-button:hover {
+    background: var(--primary);
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  /* Success screen overflow fix */
+  .success-state {
+    overflow: hidden;
+  }
+
+  .success-state .status-card {
+    overflow: hidden;
+  }
+
+  /* Success checkmark animation (matching end screen) */
+  .success-checkmark {
+    width: 120px;
+    height: 120px;
+    margin: 2rem auto;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1 / 1;
+  }
+
+  .checkmark-circle-success {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 3px solid var(--success, #10B981);
+    background: var(--card, white);
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: circle-scale-success 0.4s ease-out forwards;
+    aspect-ratio: 1 / 1;
+  }
+
+  .checkmark-icon-success {
+    font-size: 4.5rem;
+    color: var(--success, #10B981);
+    font-weight: bold;
+    z-index: 1;
+    position: relative;
+    animation: checkmark-appear-success 0.3s ease-out 0.6s forwards;
+    opacity: 0;
+    transform: scale(0);
+  }
+
+  @keyframes circle-scale-success {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.1);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes checkmark-appear-success {
+    0% {
+      opacity: 0;
+      transform: scale(0) rotate(-45deg);
+    }
+    50% {
+      transform: scale(1.2) rotate(0deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
+  /* Popup styles */
+  .popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+
+  .popup-content {
+    background: var(--card);
+    border-radius: var(--radius-lg);
+    padding: 0;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .popup-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--foreground);
+  }
+
+  .popup-close {
+    background: transparent;
+    border: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+    font-size: 1.125rem;
+  }
+
+  .popup-close:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .popup-body {
+    padding: 2rem;
+    overflow-y: auto;
+    max-height: 60vh;
+  }
+
+  .popup-overlay .instruction-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .popup-overlay .instruction-step {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--muted);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+
+  .popup-overlay .step-number {
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .popup-overlay .step-text {
+    font-size: 1rem;
+    color: var(--foreground);
   }
 </style>

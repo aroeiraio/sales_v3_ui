@@ -478,7 +478,8 @@ class CartService {
 
   async clearCart(showErrorDialog: boolean = true): Promise<void> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart/', {
+      // Use the correct session endpoint to clear cart and close session
+      const response = await fetch('http://localhost:8090/interface/session', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'

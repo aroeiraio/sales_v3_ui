@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finalizar Pedido - InoBag PoS</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Custom Theme -->
+    <link rel="stylesheet" href="checkout_theme.css">
+</head>
+<body>
+    <div class="full-screen-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-top">
+                <div id="offline-indicator" class="status-indicator hidden">
+                    <i data-lucide="wifi-off" class="w-4 h-4"></i>
+                    <span>Modo Offline</span>
+                </div>
+                <div class="time" id="current-time"></div>
+            </div>
+            <div class="header-main">
+                <button class="back-button" onclick="goBack()">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                    Voltar
+                </button>
+                <h1 class="page-title">Finalizar Pedido</h1>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="checkout-container">
+                
+                <!-- Loading State -->
+                <div id="loading-state" class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text">Carregando formas de pagamento...</p>
+                </div>
+
+                <!-- Payment Methods Section -->
+                <div id="payment-methods" class="payment-section hidden">
+                    <div class="section-header">
+                        <h2 class="section-title">
+                            <i data-lucide="credit-card" class="w-6 h-6"></i>
+                            Selecione a Forma de Pagamento
+                        </h2>
+                    </div>
+
+                    <!-- Payment Providers Container -->
+                    <div id="payment-providers" class="payment-providers">
+                        <!-- Dynamic content will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Error State -->
+                <div id="error-state" class="error-container hidden">
+                    <div class="error-card">
+                        <i data-lucide="wifi-off" class="w-16 h-16 text-red-500 mb-4"></i>
+                        <h3 class="error-title">Erro ao Carregar Pagamentos</h3>
+                        <p class="error-message" id="error-message-text">
+                            Não foi possível carregar as formas de pagamento disponíveis.
+                        </p>
+                        <button class="retry-button" onclick="loadPaymentMethods()">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            Tentar Novamente
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="total-section">
+                <div class="total-display">
+                    <span class="total-label">Total:</span>
+                    <span class="total-amount" id="total-amount">R$ 0,00</span>
+                </div>
+            </div>
+            <button id="confirm-payment" class="confirm-button" disabled onclick="processPayment()">
+                <i data-lucide="lock" class="w-5 h-5"></i>
+                Confirmar Pagamento
+            </button>
+        </footer>
+    </div>
+
+    <!-- Error Dialog Modal -->
+    <div id="error-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Erro</h3>
+                <button class="close-button" onclick="closeErrorModal()">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-error-message">Ocorreu um erro inesperado.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-close-btn" onclick="closeErrorModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Modal -->
+    <div id="processing-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <h3 class="modal-title mb-2">Processando Pagamento</h3>
+                <p class="text-gray-600">Por favor, aguarde...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let selectedPaymentMethod = null;
+        let paymentProviders = [];
+        let cartTotal = 0;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePage();
+        });
+
+        function initializePage() {
+            // Initialize Lucide icons
+            lucide.createIcons();
+            
+            // Update time
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+            
+            // Load cart total from localStorage or API
+            loadCartTotal();
+            
+            // Load payment methods
+            loadPaymentMethods();
+            
+            // Check online status
+            updateOnlineStatus();
+            window.addEventListener('online', updateOnlineStatus);
+            window.addEventListener('offline', updateOnlineStatus);
+        }
+
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('pt-BR');
+            document.getElementById('current-time').textContent = timeString;
+        }
+
+        function updateOnlineStatus() {
+            const isOnline = navigator.onLine;
+            const offlineIndicator = document.getElementById('offline-indicator');
+            
+            if (isOnline) {
+                offlineIndicator.classList.add('hidden');
+            } else {
+                offlineIndicator.classList.remove('hidden');
+            }
+        }
+
+        function loadCartTotal() {
+            // In a real app, this would come from your cart service
+            // For demo purposes, using a default value
+            cartTotal = 150.00;
+            document.getElementById('total-amount').textContent = `R$ ${cartTotal.toFixed(2).replace('.', ',')}`;
+        }
+
+        async function loadPaymentMethods() {
+            showLoading(true);
+            showError(false);
+            showPaymentMethods(false);
+
+            try {
+                const response = await fetch('http://localhost:8090/interface/checkout');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                paymentProviders = data.filter(item => item.broker && item.methods);
+                
+                if (paymentProviders.length === 0) {
+                    throw new Error('Nenhuma forma de pagamento disponível');
+                }
+
+                renderPaymentProviders();
+                showLoading(false);
+                showPaymentMethods(true);
+                
+            } catch (error) {
+                console.error('Error loading payment methods:', error);
+                showLoading(false);
+                showError(true, error.message);
+            }
+        }
+
+        function renderPaymentProviders() {
+            const container = document.getElementById('payment-providers');
+            container.innerHTML = '';
+
+            paymentProviders.forEach((provider, providerIndex) => {
+                if (!provider.available) return;
+
+                const providerCard = createProviderCard(provider, providerIndex);
+                container.appendChild(providerCard);
+            });
+        }
+
+        function createProviderCard(provider, providerIndex) {
+            const card = document.createElement('div');
+            card.className = 'payment-provider';
+            
+            // Clean up broker name for display
+            const displayName = provider.broker === 'MERCADOPAGO_PINPAD' ? 'MERCADOPAGO' : provider.broker;
+            
+            card.innerHTML = `
+                <div class="provider-header">
+                    <h3 class="provider-title">${displayName}</h3>
+                    ${provider.available ? '<span class="status-badge available">Disponível</span>' : '<span class="status-badge unavailable">Indisponível</span>'}
+                </div>
+                <div class="payment-methods-grid" id="methods-${providerIndex}">
+                    ${createMethodButtons(provider.methods, provider.broker, provider.qrcode)}
+                </div>
+            `;
+
+            return card;
+        }
+
+        function createMethodButtons(methods, broker, qrcode) {
+            return methods.map(method => {
+                const methodInfo = getMethodInfo(method, qrcode);
+                return `
+                    <button class="payment-method" 
+                            data-broker="${broker}" 
+                            data-method="${method}"
+                            data-qrcode="${qrcode || ''}"
+                            onclick="selectPaymentMethod('${broker}', '${method}', '${qrcode || ''}')">
+                        <i data-lucide="${methodInfo.icon}" class="w-6 h-6"></i>
+                        <span class="method-name">${methodInfo.name}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function getMethodInfo(method, qrcode) {
+            const methodMap = {
+                'debit': { name: 'Débito', icon: 'credit-card' },
+                'credit': { name: 'Crédito', icon: 'credit-card' },
+                'mercadopago': { name: 'PIX/QR Code', icon: 'qr-code' },
+                'pix': { name: 'PIX', icon: 'qr-code' }
+            };
+
+            // If it's mercadopago method and has qrcode, it's a QR code payment
+            if (method === 'mercadopago' && qrcode) {
+                return { name: 'PIX/QR Code', icon: 'qr-code' };
+            }
+
+            return methodMap[method] || { name: method.toUpperCase(), icon: 'credit-card' };
+        }
+
+        function selectPaymentMethod(broker, method, qrcode) {
+            // Remove previous selection
+            document.querySelectorAll('.payment-method').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+
+            // Add selection to clicked button
+            event.target.closest('.payment-method').classList.add('selected');
+
+            // Store selection
+            selectedPaymentMethod = { broker, method, qrcode };
+
+            // Enable confirm button
+            const confirmButton = document.getElementById('confirm-payment');
+            confirmButton.disabled = false;
+            confirmButton.innerHTML = `
+                <i data-lucide="credit-card" class="w-5 h-5"></i>
+                Pagar com ${getMethodInfo(method, qrcode).name}
+            `;
+
+            // Re-initialize icons
+            lucide.createIcons();
+        }
+
+        async function processPayment() {
+            if (!selectedPaymentMethod) return;
+
+            showProcessingModal(true);
+
+            try {
+                const response = await fetch('http://localhost:8090/interface/payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        broker: selectedPaymentMethod.broker,
+                        method: selectedPaymentMethod.method
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                showProcessingModal(false);
+
+                // Success - redirect based on payment method
+                if (selectedPaymentMethod.method === 'debit' || selectedPaymentMethod.method === 'credit') {
+                    // Redirect to Card Screen
+                    window.location.href = '/card';
+                } else if (selectedPaymentMethod.qrcode) {
+                    // Redirect to QR Screen
+                    window.location.href = '/qr';
+                } else {
+                    // Default redirect
+                    window.location.href = '/payment-success';
+                }
+
+            } catch (error) {
+                console.error('Payment processing error:', error);
+                showProcessingModal(false);
+                showErrorModal('Erro no Processamento', error.message);
+            }
+        }
+
+        // UI State Management
+        function showLoading(show) {
+            const loading = document.getElementById('loading-state');
+            loading.classList.toggle('hidden', !show);
+        }
+
+        function showError(show, message = '') {
+            const error = document.getElementById('error-state');
+            error.classList.toggle('hidden', !show);
+            
+            if (message) {
+                document.getElementById('error-message-text').textContent = message;
+            }
+        }
+
+        function showPaymentMethods(show) {
+            const methods = document.getElementById('payment-methods');
+            methods.classList.toggle('hidden', !show);
+        }
+
+        function showProcessingModal(show) {
+            const modal = document.getElementById('processing-modal');
+            modal.classList.toggle('hidden', !show);
+        }
+
+        function showErrorModal(title, message) {
+            document.getElementById('modal-error-message').textContent = message;
+            document.getElementById('error-modal').classList.remove('hidden');
+        }
+
+        function closeErrorModal() {
+            document.getElementById('error-modal').classList.add('hidden');
+        }
+
+        // Navigation
+        function goBack() {
+            window.history.back();
+        }
+    </script>
+
+    <style>
+        /* Additional custom styles */
+        .full-screen-container {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: hsl(var(--background));
+        }
+
+        .header {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .header-top {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 0.5rem 2rem;
+            font-size: 0.875rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: hsl(var(--warning));
+        }
+
+        .header-main {
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .back-button {
+            background: transparent;
+            border: none;
+            color: hsl(var(--primary-foreground));
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            border-radius: var(--radius);
+            transition: all var(--transition-normal) ease;
+            min-height: var(--button-height);
+            font-size: 1rem;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(-2px);
+        }
+
+        .page-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+            overflow-y: auto;
+            background: hsl(var(--background));
+        }
+
+        .checkout-container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Loading State */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid hsl(var(--border));
+            border-top: 4px solid hsl(var(--primary));
+            border-radius: 50%;
+            animation: spin var(--transition-slower) linear infinite;
+        }
+
+        .loading-text {
+            font-size: 1.125rem;
+            color: hsl(var(--muted-foreground));
+            font-weight: 500;
+        }
+
+        /* Payment Section */
+        .payment-section {
+            animation: slideUp var(--transition-slower) ease-out;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: hsl(var(--foreground));
+            margin-bottom: 1rem;
+        }
+
+        .payment-providers {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .payment-provider {
+            background: hsl(var(--card));
+            border: 2px solid hsl(var(--border));
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            transition: all var(--transition-normal) ease;
+            animation: slideUp var(--transition-slower) ease-out;
+            animation-fill-mode: both;
+        }
+
+        .payment-provider:nth-child(1) { animation-delay: 0ms; }
+        .payment-provider:nth-child(2) { animation-delay: 100ms; }
+        .payment-provider:nth-child(3) { animation-delay: 200ms; }
+
+        .payment-provider:hover {
+            background: hsl(var(--payment-card-hover));
+            border-color: hsl(var(--primary));
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .provider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid hsl(var(--border));
+        }
+
+        .provider-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: hsl(var(--foreground));
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-badge.available {
+            background: hsl(var(--success-bg));
+            color: hsl(var(--success));
+        }
+
+        .status-badge.unavailable {
+            background: hsl(var(--error-bg));
+            color: hsl(var(--destructive));
+        }
+
+        .payment-methods-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .payment-method {
+            background: hsl(var(--secondary));
+            color: hsl(var(--secondary-foreground));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all var(--transition-fast) ease;
+            min-height: 80px;
+            font-weight: 500;
+        }
+
+        .payment-method:hover {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            transform: scale(1.02);
+            box-shadow: var(--shadow);
+        }
+
+        .payment-method.selected {
+            background: hsl(var(--payment-card-active));
+            color: hsl(var(--primary-foreground));
+            border-color: hsl(var(--primary));
+            box-shadow: var(--shadow-md);
+            transform: scale(1.02);
+        }
+
+        .method-name {
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        /* Error State */
+        .error-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+
+        .error-card {
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--destructive) / 0.2);
+            border-radius: var(--radius-lg);
+            padding: 3rem;
+            text-align: center;
+            max-width: 400px;
+            animation: shake var(--transition-slower) ease-in-out;
+        }
+
+        .error-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: hsl(var(--destructive));
+            margin-bottom: 1rem;
+        }
+
+        .error-message {
+            color: hsl(var(--muted-foreground));
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .retry-button {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius);
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0 auto;
+            transition: all var(--transition-normal) ease;
+        }
+
+        .retry-button:hover {
+            background: hsl(var(--primary) / 0.9);
+            transform: translateY(-1px);
+        }
+
+        /* Footer */
+        .footer {
+            background: hsl(var(--card));
+            border-top: 1px solid hsl(var(--border));
+            padding: 1.5rem 2rem;
+            flex-shrink: 0;
+        }
+
+        .total-section {
+            margin-bottom: 1rem;
+        }
+
+        .total-display {
+            background: hsl(var(--success-bg));
+            border: 1px solid hsl(var(--success));
+            border-radius: var(--radius);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .total-label {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: hsl(var(--foreground));
+        }
+
+        .total-amount {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: hsl(var(--success));
+        }
+
+        .confirm-button {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            border: none;
+            width: 100%;
+            padding: 1rem;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 1.125rem;
+            cursor: pointer;
+            transition: all var(--transition-normal) ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            min-height: var(--button-height);
+        }
+
+        .confirm-button:hover:not(:disabled) {
+            background: hsl(var(--primary) / 0.9);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .confirm-button:disabled {
+            background: hsl(var(--muted));
+            color: hsl(var(--muted-foreground));
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: hsl(0 0% 0% / 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn var(--transition-slow) ease;
+        }
+
+        .modal-content {
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: auto;
+            animation: slideUp var(--transition-slow) ease;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid hsl(var(--border));
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: hsl(var(--foreground));
+        }
+
+        .close-button {
+            background: transparent;
+            border: none;
+            color: hsl(var(--muted-foreground));
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: var(--radius);
+            transition: all var(--transition-fast) ease;
+        }
+
+        .close-button:hover {
+            background: hsl(var(--muted));
+            color: hsl(var(--foreground));
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid hsl(var(--border));
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .modal-close-btn {
+            background: hsl(var(--secondary));
+            color: hsl(var(--secondary-foreground));
+            border: 1px solid hsl(var(--border));
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast) ease;
+        }
+
+        .modal-close-btn:hover {
+            background: hsl(var(--secondary) / 0.8);
+        }
+
+        /* Animations */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header-top,
+            .header-main {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .payment-methods-grid {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+
+            .footer {
+                padding: 1rem;
+            }
+
+            .modal-content {
+                margin: 1rem;
+                width: calc(100% - 2rem);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .payment-provider {
+                padding: 1rem;
+            }
+
+            .error-card {
+                padding: 2rem;
+            }
+
+            .total-amount {
+                font-size: 1.25rem;
+            }
+
+            .confirm-button {
+                font-size: 1rem;
+            }
+        }
+
+        /* Utility classes */
+        .hidden { display: none !important; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .text-center { text-align: center; }
+        .text-gray-600 { color: #6b7280; }
+    </style>
+</body>
+</html>

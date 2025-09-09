@@ -1,4 +1,4 @@
-import { writable, derived, readable } from 'svelte/store';
+import { writable, derived, readable, get } from 'svelte/store';
 import { digitalSignageService, type DigitalSignageItem } from '../services/digitalSignage';
 
 // Store for digital signage items
@@ -89,7 +89,7 @@ export const digitalSignageActions = {
   nextVideo(): void {
     currentVideoIndex.update(index => {
       const urls = digitalSignageService.getMediaUrls(
-        digitalSignageService.filterValidItems(digitalSignageItems.get())
+        digitalSignageService.filterValidItems(get(digitalSignageItems))
       );
       return index + 1 < urls.length ? index + 1 : 0; // Loop back to start
     });
@@ -98,7 +98,7 @@ export const digitalSignageActions = {
   previousVideo(): void {
     currentVideoIndex.update(index => {
       const urls = digitalSignageService.getMediaUrls(
-        digitalSignageService.filterValidItems(digitalSignageItems.get())
+        digitalSignageService.filterValidItems(get(digitalSignageItems))
       );
       return index > 0 ? index - 1 : urls.length - 1; // Loop to end
     });
@@ -108,11 +108,23 @@ export const digitalSignageActions = {
     this.nextVideo();
   },
 
-  onVideoClick(): void {
-    // Stop playback and redirect to products
+  async onVideoClick(): Promise<void> {
+    // Stop playback and start session before redirecting to products
     this.stopPlayback();
+    
     if (typeof window !== 'undefined') {
-      window.location.href = '/products';
+      try {
+        // Import session service dynamically to avoid circular dependencies
+        const { sessionService } = await import('../services/session');
+        console.log('Video clicked - starting session');
+        await sessionService.startSession();
+        console.log('Session started from video click, navigating to products');
+        window.location.href = '/products';
+      } catch (error) {
+        console.error('Error starting session from video click:', error);
+        // Still redirect even if session fails
+        window.location.href = '/products';
+      }
     }
   },
 
@@ -121,7 +133,7 @@ export const digitalSignageActions = {
   },
 
   needsRefresh(): boolean {
-    const lastFetch = digitalSignageLastFetch.get();
+    const lastFetch = get(digitalSignageLastFetch);
     if (!lastFetch) return true;
     
     const now = new Date();

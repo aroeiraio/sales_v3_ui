@@ -21,6 +21,7 @@ class ErrorDialogService {
   private subscribers: ((dialogs: ErrorDialogConfig[]) => void)[] = [];
 
   showError(config: Omit<ErrorDialogConfig, 'type'>): void {
+    console.log('ErrorDialogService.showError called:', config);
     const dialog: ErrorDialogConfig = {
       type: 'error',
       autoClose: false,
@@ -68,6 +69,7 @@ class ErrorDialogService {
   }
 
   private addDialog(dialog: ErrorDialogConfig): void {
+    console.log('Adding dialog:', dialog);
     this.dialogs.push(dialog);
     this.notifySubscribers();
 

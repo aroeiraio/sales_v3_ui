@@ -34,7 +34,7 @@
 <div class="media-test-page">
   <header class="test-header">
     <h1>Media Loading Test</h1>
-    <button class="debug-button" on:click={toggleDebug}>
+    <button class="debug-button" onclick={toggleDebug}>
       {showDebug ? 'Hide' : 'Show'} Debug Info
     </button>
   </header>
@@ -63,7 +63,7 @@
             <strong>Background Image:</strong>
             {#if settings?.background_image}
               <div class="image-test">
-                <img src={settings.background_image} alt="Background" on:error={() => console.log('Background image failed to load')} />
+                <img src={settings.background_image} alt="Background" onerror={() => console.log('Background image failed to load')} />
                 <p>URL: {settings.background_image}</p>
               </div>
             {:else}
@@ -75,7 +75,7 @@
             <strong>Logo Image:</strong>
             {#if settings?.logotype_image}
               <div class="image-test">
-                <img src={settings.logotype_image} alt="Logo" on:error={() => console.log('Logo image failed to load')} />
+                <img src={settings.logotype_image} alt="Logo" onerror={() => console.log('Logo image failed to load')} />
                 <p>URL: {settings.logotype_image}</p>
               </div>
             {:else}

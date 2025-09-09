@@ -1931,6 +1931,9 @@
     border-radius: var(--radius-lg);
     padding: 2rem;
     text-align: center;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
   }
 
   .amount-display-processing {
@@ -1981,6 +1984,9 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 2rem;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
   }
 
   .steps-title {
@@ -2340,7 +2346,9 @@
     border: 2px solid var(--primary);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
-    min-width: 250px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
   }
 
   .payment-amount-qr .amount-label {

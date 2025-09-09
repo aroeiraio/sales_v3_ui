@@ -5,7 +5,9 @@ class OfflineService {
   private offlineQueue: Array<() => Promise<void>> = [];
 
   constructor() {
-    if (typeof window !== 'undefined') {
+    // Only add event listeners in browser environment
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      this.isOnline = navigator.onLine;
       window.addEventListener('online', this.handleOnline.bind(this));
       window.addEventListener('offline', this.handleOffline.bind(this));
     }
@@ -66,8 +68,12 @@ class OfflineService {
     }
   }
 
-  isOnlineStatus(): boolean {
+  getOnlineStatus(): boolean {
     return this.isOnline;
+  }
+
+  isOffline(): boolean {
+    return !this.isOnline;
   }
 
   getQueueLength(): number {
@@ -75,4 +81,30 @@ class OfflineService {
   }
 }
 
-export const offlineService = new OfflineService();
+let _offlineService: OfflineService | null = null;
+
+export const offlineService = {
+  get instance(): OfflineService {
+    if (!_offlineService) {
+      _offlineService = new OfflineService();
+    }
+    return _offlineService;
+  },
+  
+  // Delegate methods for easier usage
+  isOnline(): boolean {
+    return this.instance.isOnline();
+  },
+  
+  isOffline(): boolean {
+    return this.instance.isOffline();
+  },
+  
+  addToQueue(operation: () => Promise<void>): void {
+    return this.instance.addToQueue(operation);
+  },
+  
+  getQueueLength(): number {
+    return this.instance.getQueueLength();
+  }
+};

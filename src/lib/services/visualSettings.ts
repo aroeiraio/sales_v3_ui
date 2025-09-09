@@ -1,6 +1,7 @@
 import { get } from '../utils/api';
 import { ENDPOINTS } from '../utils/constants';
 import { processVisualSettings } from '../utils/urlNormalizer';
+import { mockSettings } from './mockData';
 
 export interface VisualSettings {
   background_color: string;
@@ -33,23 +34,23 @@ class VisualSettingsService {
       if (!data || data.length === 0 || !data[0]) {
         this.settings = this.fallbackSettings;
       } else {
-        // Process the settings to normalize media URLs
+        // Process the settings to normalize media URLs and validate images
         const rawSettings = data[0];
         console.log('Raw settings from API:', rawSettings);
         
-        const processedSettings = processVisualSettings(rawSettings);
+        const processedSettings = this.processAndValidateSettings(rawSettings);
         console.log('Processed settings:', processedSettings);
         
         this.settings = { ...this.fallbackSettings, ...processedSettings };
       }
       
       this.applySettings();
-      return this.settings;
+      return this.settings!;
     } catch (error) {
-      console.warn('Failed to load visual settings, using fallback:', error);
-      this.settings = this.fallbackSettings;
+      console.warn('Failed to load visual settings, using mock data:', error);
+      this.settings = { ...this.fallbackSettings, ...mockSettings };
       this.applySettings();
-      return this.settings;
+      return this.settings!;
     }
   }
 
@@ -82,8 +83,8 @@ class VisualSettingsService {
       // The API returns an array with settings and timestamp
       const [settings, metadata] = response;
       
-      // Process the settings to normalize media URLs
-      const processedSettings = processVisualSettings(settings);
+      // Process the settings to normalize media URLs and validate images
+      const processedSettings = this.processAndValidateSettings(settings);
       console.log('Processed settings (getVisualSettings):', processedSettings);
       
       return {
@@ -102,6 +103,47 @@ class VisualSettingsService {
       console.error('Failed to fetch visual settings:', error);
       throw error;
     }
+  }
+
+  private processAndValidateSettings(rawSettings: any): Partial<VisualSettings> {
+    // First process the settings to normalize media URLs
+    const processedSettings = processVisualSettings(rawSettings);
+    
+    // Validate image paths - only use if they have file extensions
+    const validatedSettings: Partial<VisualSettings> = { ...processedSettings };
+    
+    // Validate background_image
+    if (validatedSettings.background_image) {
+      if (!this.hasFileExtension(validatedSettings.background_image)) {
+        console.log('Background image has no file extension, using default:', validatedSettings.background_image);
+        validatedSettings.background_image = '';
+      }
+    }
+    
+    // Validate logotype_image
+    if (validatedSettings.logotype_image) {
+      if (!this.hasFileExtension(validatedSettings.logotype_image)) {
+        console.log('Logotype image has no file extension, using default:', validatedSettings.logotype_image);
+        validatedSettings.logotype_image = '';
+      }
+    }
+    
+    return validatedSettings;
+  }
+
+  private hasFileExtension(path: string): boolean {
+    if (!path || typeof path !== 'string') return false;
+    
+    // Remove query parameters and fragments
+    const cleanPath = path.split('?')[0].split('#')[0];
+    
+    // Check if path ends with a file extension
+    const hasExtension = /\.(jpg|jpeg|png|gif|bmp|webp|svg|ico)$/i.test(cleanPath);
+    
+    // Also check if it's just a directory path (like "/media/customer/")
+    const isDirectoryPath = cleanPath.endsWith('/') || cleanPath === '/media/customer';
+    
+    return hasExtension && !isDirectoryPath;
   }
 
   getDefaultSettings(): VisualSettings {

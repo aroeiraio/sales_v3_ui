@@ -1,0 +1,48 @@
+Develop a case for a USB device.
+
+The USB device has a circuit board with 50 x 33 mm.
+Each border has a followed constraint:
+A - 33 mm - a USB connector of 12.1mm in the center (10.6 mm of each corner). 15mm of USB connector is out of this board.
+B - 50 mm - a screw terminal block of 29.7 x 7,7 mm positioned from C to A 
+C - 33 mm - a 5-pin header of 15mm located on the center having a 1.5mm of space among screw terminal block
+D - 50 mm - a screw terminal block of 29.7 x 7,7 mm positioned from C to A followed by a 2,6mm of space and 3-pin header of 7,5mm
+
+In the corner of AB and AD there are two holes of 3.2mm and 1mm padding. The roles is intended to be used to enforce case.
+
+The case must expose the pins and screw terminal block, also the USB connector.
+
+PCB dimensions:
+
+50 mm × 33 mm × 1.6 mm
+
+Each
+
+Side A (short side, 33 mm):
+
+USB connector, 12.1 x 4.4 mm wide, centered. Connector extends 15 mm outside the board.
+
+Side B (long side, 50 mm, between corners C → A):
+Screw terminal block, 29.7 mm × 7.7 mm, flush with edge, starting from corner C toward A.
+
+Side C (short side, 33 mm):
+5-pin header, 15 mm wide, centered.
+Keep 1.5 mm clearance from the screw terminal block on side B.
+
+Side D (long side, 50 mm, between corners C → A):
+Screw terminal block, 29.7 mm × 7.7 mm, flush with edge, starting from corner C toward A.
+Followed by a 2.6 mm gap, then a 3-pin header, 7.5 mm wide.
+
+Mounting holes:
+Two holes, 3.2 mm diameter, placed at corners AB and AD, inset with 1 mm padding from both X and Y edges.
+
+Intended for screws to secure the case halves.
+
+Case requirements:
+Internal clearance above PCB: ~12–15 mm.
+
+Must expose:
+
+USB connector (side A).
+Screw terminal blocks (sides B and D).
+5-pin and 3-pin headers (sides C and D).
+Two-part design (top + bottom shell) recommended, with mounting holes aligned.

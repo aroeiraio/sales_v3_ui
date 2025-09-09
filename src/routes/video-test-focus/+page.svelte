@@ -75,10 +75,10 @@
   <header class="test-header">
     <h1>Video Player Focus Test</h1>
     <div class="test-controls">
-      <button class="reload-button" on:click={reloadVideos}>
+      <button class="reload-button" onclick={reloadVideos}>
         Reload Videos
       </button>
-      <button class="test-button" on:click={testSpecificVideo}>
+      <button class="test-button" onclick={testSpecificVideo}>
         Test Specific Video
       </button>
     </div>

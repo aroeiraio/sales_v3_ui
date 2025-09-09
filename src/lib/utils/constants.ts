@@ -26,12 +26,14 @@ export const COLORS = {
 } as const;
 
 export const ENDPOINTS = {
+  baseUrl: 'http://localhost:8090',
   visual_settings: '/visual_settings',
   digital_signage: '/digital_signage',
   session: '/session',
   categories: '/categories',
   products: '/products',
   cart: '/cart',
+  checkout: '/checkout',
   payment: '/payment',
   media: '/media' // Media endpoint
 } as const;

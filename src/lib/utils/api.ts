@@ -13,6 +13,8 @@ export async function apiCall<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   
+  console.log(`API Call: ${options.method || 'GET'} ${url}`, options);
+  
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -21,6 +23,8 @@ export async function apiCall<T>(
     ...options,
   });
 
+  console.log(`API Response: ${response.status} ${response.statusText} for ${url}`);
+
   if (!response.ok) {
     throw new ApiError(
       response.status,
@@ -28,7 +32,21 @@ export async function apiCall<T>(
     );
   }
 
-  return response.json();
+  // Handle empty response bodies gracefully
+  const contentType = response.headers.get('content-type');
+  const text = await response.text();
+  
+  if (!text || text.trim() === '') {
+    console.log('Empty response body, returning empty object');
+    return {} as T;
+  }
+  
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.warn('Failed to parse JSON response:', text);
+    return {} as T;
+  }
 }
 
 export async function get<T>(endpoint: string): Promise<T> {

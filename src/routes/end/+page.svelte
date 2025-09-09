@@ -2,16 +2,34 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
-  import { Home, Receipt } from 'lucide-svelte';
+  import { Home, Receipt, Package } from 'lucide-svelte';
   
   let isVisible = false;
   let orderNumber = '#' + Math.floor(Math.random() * 900000 + 100000).toString();
+  let countdown = 10;
+  let countdownInterval: NodeJS.Timeout;
 
   onMount(() => {
     // Animate the checkmark after component mounts
     setTimeout(() => {
       isVisible = true;
     }, 200);
+
+    // Start countdown timer
+    countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) {
+        clearInterval(countdownInterval);
+        goHome();
+      }
+    }, 1000);
+
+    // Cleanup interval on component destroy
+    return () => {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+    };
   });
 
   function goHome() {
@@ -29,9 +47,11 @@
       <div class="background-pattern"></div>
       <div class="content-wrapper">
         <div class="success-animation" class:visible={isVisible}>
-          <div class="checkmark-container">
-            <div class="checkmark-circle"></div>
-            <div class="checkmark-icon">✓</div>
+          <div class="package-container">
+            <div class="package-background"></div>
+            <div class="package-icon-wrapper">
+              <Package size={64} class="package-icon" strokeWidth={2.5} color="white" stroke="white" />
+            </div>
           </div>
         </div>
 
@@ -52,6 +72,10 @@
           <Home size={20} />
           Fazer Nova Compra
         </button>
+        
+        <p class="countdown-text">
+          Redirecionando automaticamente em {countdown} segundos
+        </p>
       </div>
     </div>
   </main>
@@ -162,43 +186,61 @@
     position: relative;
   }
 
-  .checkmark-container {
-    width: 100%;
-    height: 100%;
+  .package-container {
+    width: 120px;
+    height: 120px;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin: 0 auto;
   }
 
-  .checkmark-circle {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    border: 3px solid var(--success, #10B981);
-    background: var(--card, white);
+  .package-background {
+    width: 120px;
+    height: 120px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, var(--primary, #0081a7) 0%, var(--secondary, #00afb9) 100%);
     position: absolute;
     top: 0;
     left: 0;
-    transform: scale(0);
+    transform: scale(0) rotate(-10deg);
+    box-shadow: 0 8px 24px rgba(0, 129, 167, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    z-index: 5;
   }
 
-  .success-animation.visible .checkmark-circle {
-    animation: circle-scale 0.4s ease-out forwards;
+  .success-animation.visible .package-background {
+    animation: package-background-appear 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
   }
 
-  .checkmark-icon {
-    font-size: 4.5rem;
-    color: var(--success, #10B981);
-    font-weight: bold;
+  .package-icon-wrapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0) rotate(15deg);
     opacity: 0;
-    transform: scale(0);
-    z-index: 1;
-    position: relative;
+    z-index: 10;
   }
 
-  .success-animation.visible .checkmark-icon {
-    animation: checkmark-appear 0.3s ease-out 0.6s forwards;
+  .package-icon {
+    color: white !important;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+
+  .package-icon :global(svg) {
+    color: white !important;
+    stroke: white !important;
+    fill: white !important;
+  }
+
+  .package-icon :global(svg path) {
+    stroke: white !important;
+    fill: white !important;
+  }
+
+  .success-animation.visible .package-icon-wrapper {
+    animation: package-icon-appear 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.7s forwards;
   }
 
   @keyframes circle-scale {
@@ -215,17 +257,33 @@
     }
   }
 
-  @keyframes checkmark-appear {
+  @keyframes package-background-appear {
     0% {
       opacity: 0;
-      transform: scale(0) rotate(-45deg);
+      transform: scale(0) rotate(-10deg);
     }
     50% {
-      transform: scale(1.2) rotate(0deg);
+      opacity: 1;
+      transform: scale(1.1) rotate(-5deg);
     }
     100% {
       opacity: 1;
       transform: scale(1) rotate(0deg);
+    }
+  }
+
+  @keyframes package-icon-appear {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0) rotate(15deg);
+    }
+    50% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.3) rotate(5deg);
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1) rotate(0deg);
     }
   }
 
@@ -310,6 +368,14 @@
 
   .action-button:active {
     transform: translateY(0);
+  }
+
+  .countdown-text {
+    font-size: 1rem;
+    color: var(--muted-foreground, #64748B);
+    margin-top: 1.5rem;
+    text-align: center;
+    font-weight: 500;
   }
 
   /* Responsive design */

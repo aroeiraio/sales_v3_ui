@@ -456,6 +456,13 @@
                         Aguarde a confirmação do pagamento
                     </div>
                 </li>
+                
+               <li class="step-item">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        Aguarde a liberação dos itens
+                    </div>
+                </li>
             </ol>
             <button class="cancel-button">
                 <i data-lucide="x"></i>

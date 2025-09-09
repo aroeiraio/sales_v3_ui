@@ -10,11 +10,13 @@
   let controlsTimeout: NodeJS.Timeout | null = null;
 
   // Watch for video source changes
-  $: if (videoElement && playerState.currentVideo) {
-    console.log('Video source changed to:', playerState.currentVideo.url);
-    videoElement.src = playerState.currentVideo.url;
-    videoElement.load();
-  }
+  $effect(() => {
+    if (videoElement && playerState.currentVideo) {
+      console.log('Video source changed to:', playerState.currentVideo.url);
+      videoElement.src = playerState.currentVideo.url;
+      videoElement.load();
+    }
+  });
 
   // Auto-hide controls after 3 seconds
   const CONTROLS_TIMEOUT = 3000;
@@ -139,8 +141,8 @@
 <div 
   class="video-player-container"
   class:fullscreen={isFullscreen}
-  on:mousemove={handleMouseMove}
-  on:mouseleave={handleMouseLeave}
+  onmousemove={handleMouseMove}
+  onmouseleave={handleMouseLeave}
 >
   <div class="video-wrapper">
     <video
@@ -150,13 +152,13 @@
       muted
       autoplay
       playsinline
-      on:click={handleVideoClick}
-      on:dblclick={handleVideoDoubleClick}
-      on:loadeddata={() => console.log('Video loaded successfully')}
-      on:loadstart={() => console.log('Video load started')}
-      on:canplay={() => console.log('Video can play')}
-      on:error={(e) => console.error('Video error:', e)}
-      on:srcchange={() => console.log('Video source changed to:', videoElement?.src)}
+      onclick={handleVideoClick}
+      ondblclick={handleVideoDoubleClick}
+      onloadeddata={() => console.log('Video loaded successfully')}
+      onloadstart={() => console.log('Video load started')}
+      oncanplay={() => console.log('Video can play')}
+      onerror={(e) => console.error('Video error:', e)}
+      onsrcchange={() => console.log('Video source changed to:', videoElement?.src)}
     >
       <p>Seu navegador não suporta vídeos HTML5.</p>
     </video>
@@ -186,7 +188,7 @@
       <div class="error-overlay">
         <div class="error-content">
           <p>Erro ao carregar vídeo</p>
-          <button class="retry-button" on:click={() => videoPlayerService.loadVideos()}>
+          <button class="retry-button" onclick={() => videoPlayerService.loadVideos()}>
             Tentar Novamente
           </button>
         </div>
@@ -213,7 +215,7 @@
           <div class="center-controls">
             <button 
               class="control-button prev-button"
-              on:click={handlePreviousVideo}
+              onclick={handlePreviousVideo}
               title="Vídeo Anterior"
             >
               <SkipBack size={24} />
@@ -221,7 +223,7 @@
 
             <button 
               class="control-button play-pause-button"
-              on:click={handlePlayPause}
+              onclick={handlePlayPause}
               title={playerState.isPlaying ? 'Pausar' : 'Reproduzir'}
             >
               {#if playerState.isPlaying}
@@ -233,7 +235,7 @@
 
             <button 
               class="control-button next-button"
-              on:click={handleNextVideo}
+              onclick={handleNextVideo}
               title="Próximo Vídeo"
             >
               <SkipForward size={24} />
@@ -244,7 +246,7 @@
           <div class="bottom-controls">
             <button 
               class="control-button restart-button"
-              on:click={handleRestart}
+              onclick={handleRestart}
               title="Reiniciar"
             >
               <RotateCcw size={20} />

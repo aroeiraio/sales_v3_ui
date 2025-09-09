@@ -90,13 +90,13 @@
   <header class="test-header">
     <h1>Video Player Test</h1>
     <div class="test-controls">
-      <button class="debug-button" on:click={toggleDebug}>
+      <button class="debug-button" onclick={toggleDebug}>
         {showDebug ? 'Hide' : 'Show'} Debug Info
       </button>
-      <button class="reload-button" on:click={reloadVideos}>
+      <button class="reload-button" onclick={reloadVideos}>
         Reload Videos
       </button>
-      <button class="test-button" on:click={testSpecificVideo}>
+      <button class="test-button" onclick={testSpecificVideo}>
         Test Specific Video
       </button>
     </div>

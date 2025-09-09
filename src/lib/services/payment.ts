@@ -64,11 +64,13 @@ export interface PosPaymentStatus {
 export type PaymentState = 
   | 'idle' 
   | 'wait' 
+  | 'show_qrcode'
   | 'insert_tap_card' 
   | 'processing' 
   | 'success' 
   | 'failed' 
-  | 'retry';
+  | 'retry'
+  | 'payment_timeout';
 
 class PaymentService {
   private readonly paymentMethods: PaymentMethod[] = [
@@ -98,6 +100,8 @@ class PaymentService {
   private pollingInterval: NodeJS.Timeout | null = null;
   private currentState: PaymentState = 'idle';
   private stateChangeCallback: ((state: PaymentState, data?: any) => void) | null = null;
+  private waitTimeoutId: NodeJS.Timeout | null = null;
+  private waitStartTime: number | null = null;
 
   getPaymentMethods(): PaymentMethod[] {
     return this.paymentMethods;
@@ -115,6 +119,43 @@ class PaymentService {
     this.currentState = newState;
     if (this.stateChangeCallback) {
       this.stateChangeCallback(newState, data);
+    }
+  }
+
+  private startWaitTimeout() {
+    this.waitStartTime = Date.now();
+    this.waitTimeoutId = setTimeout(async () => {
+      console.log('PIX payment timeout reached (15s), canceling payment');
+      try {
+        // Cancel the payment
+        await fetch('http://localhost:8090/interface/payment', {
+          method: 'DELETE'
+        });
+        this.stopPolling();
+        this.setState('payment_timeout');
+      } catch (error) {
+        console.error('Error canceling payment:', error);
+        this.setState('payment_timeout');
+      }
+    }, 15000); // 15 seconds
+  }
+
+  private clearWaitTimeout() {
+    if (this.waitTimeoutId) {
+      clearTimeout(this.waitTimeoutId);
+      this.waitTimeoutId = null;
+      this.waitStartTime = null;
+    }
+  }
+
+  async cancelPayment(): Promise<void> {
+    try {
+      await fetch('http://localhost:8090/interface/payment', {
+        method: 'DELETE'
+      });
+      console.log('Payment canceled successfully');
+    } catch (error) {
+      console.error('Error canceling payment:', error);
     }
   }
 
@@ -265,7 +306,19 @@ class PaymentService {
     
     switch (status.action) {
       case 'WAIT':
-        this.setState('wait');
+        // For PIX, WAIT state is handled in processing - just continue waiting for SHOW_QRCODE
+        // Start 15-second timeout for PIX payments (if SHOW_QRCODE doesn't come)
+        this.startWaitTimeout();
+        break;
+      
+      case 'SHOW_QRCODE':
+        // Clear timeout since QR code is ready
+        this.clearWaitTimeout();
+        this.setState('show_qrcode', {
+          qrcode_source: status.qrcode_source,
+          amount: status.amount,
+          session: status.session
+        });
         break;
       
       case 'INSERT_TAP_CARD':
@@ -310,6 +363,7 @@ class PaymentService {
 
   resetPayment() {
     this.stopPolling();
+    this.clearWaitTimeout();
     this.setState('idle');
   }
 

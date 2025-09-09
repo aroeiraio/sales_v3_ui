@@ -8,6 +8,8 @@
   import { sessionService } from '$lib/services/session';
   import { checkoutService, type PaymentBroker, type CheckoutResponse } from '$lib/services/checkout';
   import { errorDialogService } from '$lib/services/errorDialog';
+  import { deliveryService, type DeliveryStatus, type DeliveryStep } from '$lib/services/delivery';
+  import ProgressSteps from '$lib/components/ui/ProgressSteps.svelte';
 
   let selectedPayment: string = '';
   let isProcessing: boolean = false;
@@ -19,6 +21,10 @@
   let maxRetries = 3;
   let checkoutData: CheckoutResponse | null = null;
   let availablePaymentMethods: PaymentBroker[] = [];
+  let deliveryStatus: DeliveryStatus | null = null;
+  let deliverySteps: DeliveryStep[] = [];
+  let countdownTimer: number = 60;
+  let qrCodeCountdownInterval: NodeJS.Timeout | null = null;
 
   const paymentMethods = paymentService.getPaymentMethods();
 
@@ -75,7 +81,20 @@
       paymentService.onStateChange((newState: PaymentState, data?: any) => {
         paymentState = newState;
         
-        if (newState === 'success') {
+        if (newState === 'show_qrcode') {
+          // Handle QR code display
+          paymentResult = {
+            transactionId: data?.session || `qr-${Date.now()}`,
+            status: 'processing',
+            message: 'QR Code ready for scanning',
+            qrcode_source: data?.qrcode_source
+          };
+          
+          // Start 60-second countdown timer
+          startQRCodeCountdown();
+        } else if (newState === 'success') {
+          // Clear countdown timer on success
+          clearQRCodeCountdown();
           // Handle successful payment
           paymentResult = {
             transactionId: data?.transactionId || `success-${Date.now()}`,
@@ -94,11 +113,23 @@
             }
           };
           
-          // Redirect to end screen after showing result for 4 seconds
-          setTimeout(() => {
-            goto('/end');
-          }, 4000);
+          // Start delivery polling
+          deliveryService.startPolling((status) => {
+            deliveryStatus = status;
+            deliverySteps = deliveryService.getStepsForStatus(status);
+            
+            // Check if delivery is complete
+            if (deliveryService.isDeliveryComplete(status)) {
+              // Wait 5 seconds then redirect to end screen
+              setTimeout(() => {
+                deliveryService.stopPolling();
+                goto('/end');
+              }, 5000);
+            }
+          });
         } else if (newState === 'failed') {
+          // Clear countdown timer on failure
+          clearQRCodeCountdown();
           // Handle failed payment
           paymentResult = {
             transactionId: `failed-${Date.now()}`,
@@ -111,6 +142,8 @@
             resetPaymentState();
           }, 3000);
         } else if (newState === 'retry') {
+          // Clear countdown timer on retry
+          clearQRCodeCountdown();
           // Handle retry state
           paymentResult = {
             transactionId: `retry-${Date.now()}`,
@@ -128,7 +161,9 @@
       // Cleanup on unmount
       return () => {
         clearInterval(timeInterval);
+        clearQRCodeCountdown();
         paymentService.stopPolling();
+        deliveryService.stopPolling();
       };
     }
   });
@@ -235,10 +270,20 @@
       }
     };
 
-    // Redirect to end screen after 4 seconds
-    setTimeout(() => {
-      goto('/end');
-    }, 4000);
+    // Start delivery polling for debug
+    deliveryService.startPolling((status) => {
+      deliveryStatus = status;
+      deliverySteps = deliveryService.getStepsForStatus(status);
+      
+      // Check if delivery is complete
+      if (deliveryService.isDeliveryComplete(status)) {
+        // Wait 5 seconds then redirect to end screen
+        setTimeout(() => {
+          deliveryService.stopPolling();
+          goto('/end');
+        }, 5000);
+      }
+    });
   }
 
   function simulateRefusedPayment() {
@@ -249,6 +294,69 @@
       status: 'failed',
       message: ''
     };
+  }
+
+  function simulateProcessingPayment() {
+    paymentState = 'processing';
+    selectedPayment = 'debug-processing';
+    isProcessing = true;
+    paymentResult = null;
+  }
+
+  function simulatePixProcessing() {
+    paymentState = 'processing';
+    selectedPayment = 'MERCADOPAGO-mercadopago';
+    isProcessing = true;
+    paymentResult = null;
+  }
+
+
+  function simulateQRCodeScreen() {
+    paymentState = 'show_qrcode';
+    selectedPayment = 'MERCADOPAGO-mercadopago';
+    isProcessing = true;
+    paymentResult = {
+      transactionId: `qr-${Date.now()}`,
+      status: 'processing',
+      message: 'QR Code ready for scanning',
+      qrcode_source: '/media/customer/sample_qr_code.png'
+    };
+    startQRCodeCountdown(); // Start the countdown for debug
+  }
+
+  function simulateTimeoutScreen() {
+    paymentState = 'payment_timeout';
+    selectedPayment = 'MERCADOPAGO-mercadopago';
+    isProcessing = false;
+    paymentResult = null;
+  }
+
+  function startQRCodeCountdown() {
+    countdownTimer = 60;
+    qrCodeCountdownInterval = setInterval(() => {
+      countdownTimer--;
+      
+      if (countdownTimer <= 0) {
+        clearQRCodeCountdown();
+        // Send cancel to payment service
+        paymentService.cancelPayment();
+        paymentService.resetPayment();
+        // Redirect to payment refused/retry
+        paymentState = 'retry';
+        paymentResult = {
+          transactionId: `timeout-${Date.now()}`,
+          status: 'failed',
+          message: 'Tempo esgotado para pagamento PIX'
+        };
+      }
+    }, 1000);
+  }
+
+  function clearQRCodeCountdown() {
+    if (qrCodeCountdownInterval) {
+      clearInterval(qrCodeCountdownInterval);
+      qrCodeCountdownInterval = null;
+    }
   }
 
   // Convert API payment methods to UI format
@@ -347,6 +455,18 @@
         <div class="debug-section">
           <h3 class="debug-title">🧪 Debug - Testar Estados</h3>
           <div class="debug-buttons">
+            <button class="debug-button processing" onclick={simulateProcessingPayment}>
+              ⏳ Processando (Cartão)
+            </button>
+            <button class="debug-button pix-processing" onclick={simulatePixProcessing}>
+              🔄 Preparando PIX
+            </button>
+            <button class="debug-button qr-code" onclick={simulateQRCodeScreen}>
+              📊 Escaneie QR Code
+            </button>
+            <button class="debug-button timeout" onclick={simulateTimeoutScreen}>
+              ⏰ Timeout PIX
+            </button>
             <button class="debug-button success" onclick={simulateSuccessPayment}>
               ✅ Simular Aprovado
             </button>
@@ -397,21 +517,242 @@
           </div>
         </div>
       </section>
-    {:else if paymentState === 'processing' || paymentState === 'wait'}
-      <section class="section payment-status active">
-        <div class="status-icon-container">
-          <i class="icon-loader-2 status-icon spinning"></i>
+    {:else if paymentState === 'processing'}
+      <section class="section payment-status active processing-screen">
+        <div class="processing-header">
+          <div class="status-icon-container">
+            <div class="loader-spinner"></div>
+          </div>
+          {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
+            <div class="status-message">Preparando PIX</div>
+            <div class="status-description">Gerando QR Code para pagamento instantâneo</div>
+          {:else}
+            <div class="status-message">Processando pagamento</div>
+            <div class="status-description">Por favor, aguarde enquanto processamos seu pagamento</div>
+          {/if}
         </div>
-        <div class="status-message">Processando pagamento</div>
-        <div class="status-description">Por favor, aguarde enquanto iniciamos seu pagamento</div>
+
+        <div class="payment-details-card">
+          <div class="amount-display-processing">
+            {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
+              <div class="amount-label">Valor do PIX</div>
+            {:else}
+              <div class="amount-label">Valor sendo processado</div>
+            {/if}
+            <div class="amount-value">{formatPrice(cart.total)}</div>
+          </div>
+          
+          {#if selectedPayment}
+            <div class="payment-method-display">
+              <div class="method-label">Método de pagamento</div>
+              <div class="method-value">
+                {#each getDisplayPaymentMethods() as method}
+                  {#if method.id === selectedPayment}
+                    <i class="icon-{method.icon}"></i>
+                    {method.name}
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <div class="processing-steps">
+          {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
+            <h3 class="steps-title">Preparando PIX</h3>
+            <div class="step-list">
+              <div class="step-item active">
+                <div class="step-icon">
+                  <i class="icon-check"></i>
+                </div>
+                <div class="step-text">Validando dados</div>
+              </div>
+              <div class="step-item active">
+                <div class="step-icon processing">
+                  <div class="processing-dot small"></div>
+                  <div class="processing-dot small"></div>
+                  <div class="processing-dot small"></div>
+                </div>
+                <div class="step-text">Gerando QR Code</div>
+              </div>
+              <div class="step-item pending">
+                <div class="step-icon">
+                  <i class="icon-qr-code"></i>
+                </div>
+                <div class="step-text">Exibindo PIX</div>
+              </div>
+            </div>
+          {:else}
+            <h3 class="steps-title">Etapas do processamento</h3>
+            <div class="step-list">
+              <div class="step-item active">
+                <div class="step-icon">
+                  <i class="icon-check"></i>
+                </div>
+                <div class="step-text">Validando dados</div>
+              </div>
+              <div class="step-item active">
+                <div class="step-icon processing">
+                  <div class="processing-dot small"></div>
+                  <div class="processing-dot small"></div>
+                  <div class="processing-dot small"></div>
+                </div>
+                <div class="step-text">Processando pagamento</div>
+              </div>
+              <div class="step-item pending">
+                <div class="step-icon">
+                  <i class="icon-package"></i>
+                </div>
+                <div class="step-text">Liberando produtos</div>
+              </div>
+            </div>
+          {/if}
+        </div>
+
         <div class="processing-animation">
           <div class="processing-dot"></div>
           <div class="processing-dot"></div>
           <div class="processing-dot"></div>
         </div>
-        <button class="cancel-payment-button" onclick={cancelPayment}>
-          Cancelar pagamento
-        </button>
+
+        <div class="processing-footer">
+          {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
+            <p class="processing-note">
+              <i class="icon-info"></i>
+              Aguarde enquanto geramos seu QR Code PIX
+            </p>
+          {:else}
+            <p class="processing-note">
+              <i class="icon-info"></i>
+              Não feche esta janela até a conclusão do pagamento
+            </p>
+          {/if}
+          <button class="cancel-payment-button" onclick={cancelPayment}>
+            <i class="icon-x"></i>
+            Cancelar pagamento
+          </button>
+        </div>
+      </section>
+    {:else if paymentState === 'show_qrcode'}
+      <section class="section payment-status active qr-code-screen">
+        <div class="qr-header">
+          <div class="status-icon-container">
+            <div class="loader-spinner"></div>
+          </div>
+          <div class="status-message">Escaneie o QR Code</div>
+          <div class="status-description">Use seu celular para escanear o código PIX</div>
+        </div>
+
+        <div class="qr-main-container">
+          <div class="qr-code-display">
+            {#if paymentResult?.qrcode_source}
+              <img 
+                src="http://localhost:8090{paymentResult.qrcode_source}" 
+                alt="QR Code PIX" 
+                class="qr-code-image"
+              />
+            {:else}
+              <div class="qr-code-placeholder">
+                <div class="loader-spinner qr-spinner"></div>
+                <div class="loading-text">Carregando QR Code...</div>
+              </div>
+            {/if}
+          </div>
+          
+          <div class="payment-amount-qr">
+            <div class="amount-label">Valor do PIX</div>
+            <div class="amount-value">{formatPrice(cart.total)}</div>
+          </div>
+        </div>
+
+        <div class="qr-instructions">
+          <h3 class="instructions-title">Como pagar</h3>
+          <div class="instruction-grid">
+            <div class="instruction-step">
+              <div class="step-number">1</div>
+              <div class="step-text">Abra o aplicativo do seu banco</div>
+            </div>
+            <div class="instruction-step">
+              <div class="step-number">2</div>
+              <div class="step-text">Escolha a opção "Pagar com PIX"</div>
+            </div>
+            <div class="instruction-step">
+              <div class="step-number">3</div>
+              <div class="step-text">Escaneie o QR Code exibido na tela</div>
+            </div>
+            <div class="instruction-step">
+              <div class="step-number">4</div>
+              <div class="step-text">Confirme as informações e valor</div>
+            </div>
+            <div class="instruction-step">
+              <div class="step-number">5</div>
+              <div class="step-text">Aguarde a confirmação do pagamento</div>
+            </div>
+            <div class="instruction-step">
+              <div class="step-number">6</div>
+              <div class="step-text">Aguarde a liberação dos itens</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="qr-footer">
+          <div class="countdown-container">
+            <div class="countdown-circle">
+              <svg class="countdown-svg" width="60" height="60">
+                <circle 
+                  cx="30" 
+                  cy="30" 
+                  r="25" 
+                  stroke="var(--border)" 
+                  stroke-width="4" 
+                  fill="none"
+                />
+                <circle 
+                  cx="30" 
+                  cy="30" 
+                  r="25" 
+                  stroke="var(--primary)" 
+                  stroke-width="4" 
+                  fill="none"
+                  class="countdown-progress"
+                  stroke-dasharray="157"
+                  stroke-dashoffset={157 - (countdownTimer / 60) * 157}
+                />
+              </svg>
+              <div class="countdown-text">{countdownTimer}s</div>
+            </div>
+          </div>
+          <p class="qr-status">
+            <i class="icon-info"></i>
+            Complete o pagamento antes que o tempo expire
+          </p>
+          <button class="cancel-payment-button" onclick={cancelPayment}>
+            <i class="icon-x"></i>
+            Cancelar pagamento
+          </button>
+        </div>
+      </section>
+    {:else if paymentState === 'payment_timeout'}
+      <section class="section payment-status active timeout-screen">
+        <div class="timeout-content">
+          <div class="timeout-icon">
+            <i class="icon-clock status-icon error"></i>
+          </div>
+          <div class="status-message error">Tempo esgotado</div>
+          <div class="status-description">
+            Desculpe, houve uma falha no processamento do seu pagamento.
+            O tempo limite foi excedido.
+          </div>
+        </div>
+
+        <div class="timeout-actions">
+          <button class="retry-button large-button" onclick={() => location.reload()}>
+            Tentar novamente
+          </button>
+          <button class="cancel-button large-button" onclick={() => goto('/')}>
+            Cancelar
+          </button>
+        </div>
       </section>
     {:else if paymentState === 'insert_tap_card'}
       <section class="section payment-status active card-payment-screen">
@@ -486,20 +827,45 @@
       </section>
     {:else if paymentState === 'success'}
       <section class="section payment-status active success-state">
-        <div class="success-content-center">
-          <div class="success-animation">
-            <div class="success-circle">
-              <span class="status-icon success">✓</span>
-            </div>
+        <div class="status-card">
+          <div class="status-icon-container">
+            <i class="icon-package status-icon pulsing"></i>
           </div>
-          <div class="status-message">Pagamento Aprovado!</div>
+          <div class="status-badge success">
+            <i class="icon-check"></i>
+            Pagamento Aprovado
+          </div>
+          <h2 class="status-title">Preparando seus produtos</h2>
+          <p class="status-message">
+            Aguarde enquanto seus produtos são liberados
+          </p>
+
+          {#if deliverySteps.length > 0}
+            <ProgressSteps steps={deliverySteps} />
+          {/if}
         </div>
-        
+
         {#if paymentResult?.receipt}
-          <div class="receipt-info">
-            <p><strong>Transação:</strong> {paymentResult.receipt.transactionId}</p>
-            <p><strong>Total:</strong> {formatPrice(paymentResult.receipt.total)}</p>
-            <p><strong>Método:</strong> {paymentResult.receipt.paymentMethod}</p>
+          <div class="transaction-details">
+            <h3 class="details-title">Detalhes do Pedido</h3>
+            <div class="details-grid">
+              <div class="detail-group">
+                <span class="detail-label">Número da Transação</span>
+                <span class="detail-value">{paymentResult.receipt.transactionId}</span>
+              </div>
+              <div class="detail-group">
+                <span class="detail-label">Data</span>
+                <span class="detail-value">{new Date(paymentResult.receipt.timestamp).toLocaleString('pt-BR')}</span>
+              </div>
+              <div class="detail-group">
+                <span class="detail-label">Método de Pagamento</span>
+                <span class="detail-value">{paymentResult.receipt.paymentMethod}</span>
+              </div>
+              <div class="detail-group">
+                <span class="detail-label">Valor Total</span>
+                <span class="detail-value">{formatPrice(paymentResult.receipt.total)}</span>
+              </div>
+            </div>
           </div>
         {/if}
       </section>
@@ -763,6 +1129,10 @@
     height: 64px;
     margin: 0 auto 1rem;
     color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
   }
 
   .status-icon.success {
@@ -775,11 +1145,16 @@
 
   .status-icon.spinning {
     animation: spin 2s linear infinite;
+    transform-origin: center center;
   }
 
   @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from { 
+      transform: rotate(0deg);
+    }
+    to { 
+      transform: rotate(360deg);
+    }
   }
 
   .status-message {
@@ -1102,6 +1477,122 @@
     padding-top: 3rem;
   }
 
+  /* Progress-based success screen styles */
+  .status-card {
+    background: var(--card, #FFFFFF);
+    border-radius: var(--radius-lg, 1.25rem);
+    padding: 3rem 2rem;
+    text-align: center;
+    border: 1px solid var(--border, #E2E8F0);
+    margin-bottom: 2rem;
+  }
+
+  .status-icon-container {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.5rem;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 64px;
+  }
+
+  .processing-header .status-icon-container {
+    color: var(--primary);
+  }
+
+  .processing-header .status-icon-container .status-icon {
+    width: 80px;
+    height: 80px;
+    font-size: 64px;
+  }
+
+  .loader-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid var(--border);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1.5s linear infinite;
+    margin: 0 auto;
+  }
+
+  .status-icon.pulsing {
+    animation: pulse 2s infinite;
+    font-size: 48px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius, 1rem);
+    font-weight: 500;
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .status-badge.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success, #10B981);
+  }
+
+  .status-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--foreground, #1E293B);
+  }
+
+  .status-card .status-message {
+    font-size: 1.125rem;
+    color: var(--muted-foreground, #64748B);
+    margin-bottom: 2rem;
+  }
+
+  .transaction-details {
+    background: var(--card, #FFFFFF);
+    border-radius: var(--radius-lg, 1.25rem);
+    padding: 2rem;
+    border: 1px solid var(--border, #E2E8F0);
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .details-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border, #E2E8F0);
+    color: var(--foreground, #1E293B);
+  }
+
+  .details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 2rem;
+  }
+
+  .detail-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .detail-label {
+    font-size: 0.875rem;
+    color: var(--muted-foreground, #64748B);
+  }
+
+  .detail-value {
+    font-weight: 600;
+    color: var(--foreground, #1E293B);
+  }
+
   .error-state .status-message {
     color: var(--error);
   }
@@ -1392,6 +1883,554 @@
     }
   }
 
+  /* Enhanced Processing Screen Styles */
+  .processing-screen {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .processing-header {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .payment-details-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .amount-display-processing {
+    margin-bottom: 1.5rem;
+  }
+
+  .amount-display-processing .amount-label {
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  .amount-display-processing .amount-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--foreground);
+    line-height: 1.2;
+  }
+
+  .payment-method-display {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .method-label {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .method-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .processing-steps {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+  }
+
+  .steps-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    color: var(--foreground);
+  }
+
+  .step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: var(--radius);
+    transition: all 0.3s ease;
+  }
+
+  .step-item.active {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .step-item.pending {
+    background: var(--muted);
+    opacity: 0.6;
+  }
+
+  .step-item .step-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+
+  .step-item.active .step-icon {
+    background: var(--success);
+    color: white;
+  }
+
+  .step-item.pending .step-icon {
+    background: var(--border);
+    color: var(--muted-foreground);
+  }
+
+  .step-icon.processing {
+    background: var(--primary);
+    display: flex;
+    gap: 2px;
+  }
+
+  .step-icon.processing .processing-dot.small {
+    width: 4px;
+    height: 4px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 1s infinite;
+  }
+
+  .step-icon.processing .processing-dot.small:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .step-icon.processing .processing-dot.small:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  .step-text {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .processing-footer {
+    text-align: center;
+    margin-top: auto;
+  }
+
+  .processing-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--muted);
+    border-radius: var(--radius);
+  }
+
+  .cancel-payment-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  /* PIX Wait Screen Styles */
+  .pix-wait-screen {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    text-align: center;
+  }
+
+  .pix-wait-header {
+    margin-bottom: 1rem;
+  }
+
+  .pix-wait-header .status-message {
+    color: var(--primary);
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .qr-code-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    margin: 2rem 0;
+  }
+
+  .qr-code-placeholder {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .qr-code-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    width: 120px;
+    height: 120px;
+    opacity: 0.3;
+  }
+
+  .qr-pixel {
+    width: 100%;
+    height: 100%;
+    background: var(--muted);
+    border-radius: 2px;
+  }
+
+  .qr-pixel.active {
+    background: var(--foreground);
+  }
+
+  .qr-code-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    color: var(--primary);
+    animation: pulse 2s infinite;
+  }
+
+  .amount-display-pix {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    min-width: 200px;
+  }
+
+  .amount-display-pix .amount-label {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .amount-display-pix .amount-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .pix-instructions {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+  }
+
+  .pix-instructions .instructions-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: var(--foreground);
+  }
+
+  .instruction-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .instruction-step {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+
+  .step-number {
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .step-text {
+    font-size: 0.875rem;
+    color: var(--foreground);
+  }
+
+  .pix-footer {
+    margin-top: auto;
+  }
+
+  .waiting-animation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .pix-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--muted);
+    border-radius: var(--radius);
+  }
+
+  /* QR Code Screen Styles */
+  .qr-code-screen {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    text-align: center;
+  }
+
+  .qr-header {
+    margin-bottom: 1rem;
+  }
+
+  .qr-main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    margin: 2rem 0;
+  }
+
+  .qr-code-display {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    min-width: 300px;
+  }
+
+  .qr-code-image {
+    max-width: 280px;
+    max-height: 280px;
+    border: 4px solid var(--primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    background: white;
+    padding: 1rem;
+  }
+
+  .qr-code-placeholder {
+    width: 280px;
+    height: 280px;
+    border: 4px dashed var(--border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--muted);
+  }
+
+  .qr-placeholder-icon {
+    font-size: 80px;
+    color: var(--muted-foreground);
+    opacity: 0.5;
+  }
+
+  .qr-spinner {
+    width: 80px;
+    height: 80px;
+    border: 6px solid var(--border);
+    border-top: 6px solid var(--primary);
+  }
+
+  .loading-text {
+    margin-top: 1rem;
+    color: var(--muted-foreground);
+    font-size: 1rem;
+  }
+
+  .payment-amount-qr {
+    background: var(--card);
+    border: 2px solid var(--primary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    min-width: 250px;
+  }
+
+  .payment-amount-qr .amount-label {
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+  }
+
+  .payment-amount-qr .amount-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .instruction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+  }
+
+  .qr-footer {
+    margin-top: auto;
+  }
+
+  .countdown-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .countdown-circle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .countdown-svg {
+    transform: rotate(-90deg);
+  }
+
+  .countdown-progress {
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  .countdown-text {
+    position: absolute;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .qr-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(0, 129, 167, 0.1);
+    border-radius: var(--radius);
+    font-weight: 500;
+  }
+
+  /* Timeout Screen Styles */
+  .timeout-screen {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+    text-align: center;
+    min-height: 60vh;
+    justify-content: center;
+  }
+
+  .timeout-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .timeout-icon {
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(240, 113, 103, 0.1);
+    border-radius: 50%;
+    margin-bottom: 1rem;
+  }
+
+  .timeout-icon .status-icon {
+    font-size: 48px;
+    color: var(--destructive);
+  }
+
+  .status-message.error {
+    color: var(--destructive);
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .timeout-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+
   /* Icon classes */
   .icon-wifi-off::before { content: '📡'; }
   .icon-wifi::before { content: '📶'; }
@@ -1404,6 +2443,10 @@
   .icon-x-circle::before { content: '❌'; }
   .icon-power::before { content: '🔌'; }
   .icon-x::before { content: '✕'; }
+  .icon-package::before { content: '📦'; }
+  .icon-check::before { content: '✓'; }
+  .icon-info::before { content: 'ℹ️'; }
+  .icon-clock::before { content: '⏰'; }
 
   /* Debug buttons styles */
   .debug-section {
@@ -1458,6 +2501,51 @@
 
   .debug-button.refused:hover {
     background: #f5c6cb;
+    transform: translateY(-1px);
+  }
+
+  .debug-button.processing {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+  }
+
+  .debug-button.processing:hover {
+    background: #ffeaa7;
+    transform: translateY(-1px);
+  }
+
+  .debug-button.pix-processing {
+    background: #f3e5f5;
+    color: #4a148c;
+    border: 1px solid #e1bee7;
+  }
+
+  .debug-button.pix-processing:hover {
+    background: #e1bee7;
+    transform: translateY(-1px);
+  }
+
+
+  .debug-button.qr-code {
+    background: #e8f5e8;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+  }
+
+  .debug-button.qr-code:hover {
+    background: #c8e6c9;
+    transform: translateY(-1px);
+  }
+
+  .debug-button.timeout {
+    background: #fff3e0;
+    color: #ef6c00;
+    border: 1px solid #ffcc02;
+  }
+
+  .debug-button.timeout:hover {
+    background: #ffcc02;
     transform: translateY(-1px);
   }
 

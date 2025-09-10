@@ -93,15 +93,15 @@ export const offlineService = {
   
   // Delegate methods for easier usage
   isOnline(): boolean {
-    return this.instance.isOnline();
+    return this.instance.getOnlineStatus();
   },
   
   isOffline(): boolean {
     return this.instance.isOffline();
   },
   
-  addToQueue(operation: () => Promise<void>): void {
-    return this.instance.addToQueue(operation);
+  queueAction(operation: () => Promise<void>): Promise<void> {
+    return this.instance.queueAction(operation);
   },
   
   getQueueLength(): number {

@@ -27,29 +27,50 @@ class VisualSettingsService {
 
   async loadSettings(): Promise<VisualSettings> {
     try {
+      console.log('Making API call to:', `${ENDPOINTS.baseUrl}${ENDPOINTS.visual_settings}`);
       const data = await get<VisualSettings[]>(ENDPOINTS.visual_settings);
       
       console.log('Raw visual settings API response:', data);
       
       if (!data || data.length === 0 || !data[0]) {
+        console.log('No valid data from API, using fallback settings');
         this.settings = this.fallbackSettings;
       } else {
         // Process the settings to normalize media URLs and validate images
         const rawSettings = data[0];
         console.log('Raw settings from API:', rawSettings);
         
-        const processedSettings = this.processAndValidateSettings(rawSettings);
-        console.log('Processed settings:', processedSettings);
-        
-        this.settings = { ...this.fallbackSettings, ...processedSettings };
+        try {
+          const processedSettings = this.processAndValidateSettings(rawSettings);
+          console.log('Processed settings:', processedSettings);
+          
+          // Add timestamp from the API response if available
+          const timestamp = data[1]?.timestamp || new Date().toISOString();
+          
+          this.settings = { 
+            ...this.fallbackSettings, 
+            ...processedSettings,
+            timestamp 
+          };
+          console.log('Final settings:', this.settings);
+        } catch (processingError) {
+          console.warn('Failed to process settings, using fallback:', processingError);
+          this.settings = this.fallbackSettings;
+        }
       }
       
       this.applySettings();
+      console.log('Settings applied successfully');
       return this.settings!;
     } catch (error) {
-      console.warn('Failed to load visual settings, using mock data:', error);
-      this.settings = { ...this.fallbackSettings, ...mockSettings };
+      console.error('API call failed for visual settings:', error);
+      console.warn('Failed to load visual settings, using fallback:', error);
+      this.settings = { ...this.fallbackSettings };
       this.applySettings();
+      
+      // Instead of throwing, we return the fallback settings
+      // This prevents the error dialog from showing for API connectivity issues
+      console.log('Returning fallback settings due to API error');
       return this.settings!;
     }
   }

@@ -188,8 +188,8 @@
       <div class="error-overlay">
         <div class="error-content">
           <p>Erro ao carregar vídeo</p>
-          <button class="retry-button" onclick={() => videoPlayerService.loadVideos()}>
-            Tentar Novamente
+          <button class="retry-button" onclick={() => {}}>
+            Fechar
           </button>
         </div>
       </div>

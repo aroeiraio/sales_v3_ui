@@ -191,17 +191,17 @@
   }
 
   .key {
-    background: var(--secondary, #f1f5f9);
-    border: 1px solid var(--border, #e2e8f0);
+    background: #374151;
+    border: 1px solid #4b5563;
     border-radius: var(--radius, 0.5rem);
-    padding: 0.75rem;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--foreground, #1e293b);
+    padding: 0.825rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
     cursor: pointer;
     transition: all 0.1s ease;
     flex: 1;
-    min-height: 3rem;
+    min-height: 3.3rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -209,27 +209,27 @@
   }
 
   .key:hover {
-    background: var(--muted, #e2e8f0);
+    background: #4b5563;
     transform: translateY(-1px);
   }
 
   .key:active {
     transform: translateY(0);
-    background: var(--accent, #cbd5e1);
+    background: #6b7280;
   }
 
   .special-key {
-    background: var(--muted, #e2e8f0);
-    color: var(--muted-foreground, #64748b);
-    font-weight: 600;
+    background: #1f2937;
+    color: white;
+    font-weight: 700;
   }
 
   .special-key:hover {
-    background: var(--accent, #cbd5e1);
+    background: #111827;
   }
 
   .shift-key.active {
-    background: var(--primary, #0081a7);
+    background: #111827;
     color: white;
   }
 
@@ -243,26 +243,27 @@
   .close-key {
     flex: 1.5;
     font-size: 0.875rem;
+    font-weight: 700;
   }
 
   .enter-key {
-    background: var(--primary, #0081a7);
+    background: #111827;
     color: white;
-    font-weight: 600;
+    font-weight: 700;
   }
 
   .enter-key:hover {
-    background: var(--primary-hover, #006b8a);
+    background: #030712;
   }
 
   .close-key {
-    background: var(--muted, #e2e8f0);
-    color: var(--muted-foreground, #64748b);
-    font-weight: 600;
+    background: #1f2937;
+    color: white;
+    font-weight: 700;
   }
 
   .close-key:hover {
-    background: var(--accent, #cbd5e1);
+    background: #111827;
   }
 
   .backspace-key {

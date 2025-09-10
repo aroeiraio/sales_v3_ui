@@ -2,40 +2,102 @@
 	import { onMount } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import ErrorDialog from '$lib/components/ui/ErrorDialog.svelte';
+	import Toast from '$lib/components/ui/Toast.svelte';
 	import { visualSettingsService } from '$lib/services/visualSettings';
 	import { sessionService } from '$lib/services/session';
 	import { errorDialogService } from '$lib/services/errorDialog';
+	import { analyticsService } from '$lib/services/analytics';
+	import { performanceService } from '$lib/services/performance';
+	import { offlineService } from '$lib/services/offline';
 
 	let { children } = $props();
 	let settings: any = $state(null);
 
 	onMount(async () => {
+		// Clear any existing dialogs first
+		console.log('Layout onMount: Clearing existing dialogs...');
+		errorDialogService.closeAllDialogs();
+		
 		try {
-			settings = await visualSettingsService.loadSettings();
+			// Initialize core services
+			console.log('Layout onMount: Starting service initialization...');
+			analyticsService.trackSessionStart();
+			analyticsService.trackPageView('app_start', 'Application Layout');
+			
+			// Initialize offline monitoring
+			offlineService.isOnline(); // This initializes the service
+			
+			// Load visual settings
+			console.log('Starting visual settings load...');
+			settings = await performanceService.measureApiCall(
+				'load_visual_settings',
+				() => visualSettingsService.loadSettings(),
+				{ component: 'layout' }
+			);
+			console.log('Visual settings loaded successfully:', settings);
+			console.log('Layout onMount: All initialization completed successfully!');
 		} catch (error) {
+			console.error('🔥 CAUGHT ERROR IN LAYOUT:', error);
+			console.error('🔥 ERROR TYPE:', typeof error);
+			console.error('🔥 ERROR CONSTRUCTOR:', error?.constructor?.name);
+			console.error('🔥 ERROR MESSAGE:', error?.message);
+			console.error('🔥 ERROR STACK:', error?.stack);
+			
+			analyticsService.trackError(error as Error, 'layout_initialization');
 			errorDialogService.showError({
 				title: 'Erro de Configuração',
 				message: 'Não foi possível carregar as configurações visuais. Usando configurações padrão.',
-				icon: 'settings'
+				icon: 'settings',
+				persistent: false,
+				actions: [
+					{
+						label: 'OK',
+						action: () => {
+							console.log('Layout error dialog OK button clicked');
+						},
+						variant: 'primary'
+					}
+				]
 			});
 		}
+		
+		// Cleanup on page unload
+		return () => {
+			analyticsService.trackSessionEnd();
+			analyticsService.flush();
+		};
 	});
 
 	// Global error handler
 	function handleGlobalError(event: ErrorEvent) {
 		console.error('Global error:', event.error);
+		
+		// Track error in analytics
+		analyticsService.trackError(event.error, 'global_error_handler');
+		
 		errorDialogService.showError({
 			title: 'Erro do Sistema',
 			message: 'Ocorreu um erro inesperado. Por favor, tente novamente.',
 			actions: [
 				{
 					label: 'Recarregar Página',
-					action: () => window.location.reload(),
+					action: () => {
+						analyticsService.track('error_recovery', 'user_action', { 
+							action: 'page_reload',
+							error_message: event.error?.message 
+						});
+						window.location.reload();
+					},
 					variant: 'primary'
 				},
 				{
 					label: 'Continuar',
-					action: () => {},
+					action: () => {
+						analyticsService.track('error_recovery', 'user_action', { 
+							action: 'continue',
+							error_message: event.error?.message 
+						});
+					},
 					variant: 'secondary'
 				}
 			]
@@ -56,6 +118,7 @@
 <main class="app" style:background-color={settings?.background_color || 'var(--fallback-bg)'}>
 	{@render children?.()}
 	<ErrorDialog />
+	<Toast />
 </main>
 
 <style>

@@ -68,12 +68,14 @@ export function normalizeMediaPath(path: string): string | null {
 
   // If it's just a directory path without extension, return null
   if (!hasFileExtension(path)) {
-    console.log(`Path "${path}" is a directory, not a file`);
+    console.log(`Path "${path}" is a directory, not a file - returning null`);
     return null;
   }
 
   // Normalize the URL
-  return normalizeUrl(path);
+  const normalizedUrl = normalizeUrl(path);
+  console.log(`Normalized "${path}" to "${normalizedUrl}"`);
+  return normalizedUrl;
 }
 
 /**
@@ -88,12 +90,16 @@ export function processVisualSettings(settings: any): any {
 
   // Process background image
   if (processed.background_image) {
-    processed.background_image = normalizeMediaPath(processed.background_image);
+    const normalizedBg = normalizeMediaPath(processed.background_image);
+    processed.background_image = normalizedBg || ''; // Set to empty string if null
+    console.log(`Background image processed: "${settings.background_image}" -> "${processed.background_image}"`);
   }
 
   // Process logotype image
   if (processed.logotype_image) {
-    processed.logotype_image = normalizeMediaPath(processed.logotype_image);
+    const normalizedLogo = normalizeMediaPath(processed.logotype_image);
+    processed.logotype_image = normalizedLogo || ''; // Set to empty string if null
+    console.log(`Logotype image processed: "${settings.logotype_image}" -> "${processed.logotype_image}"`);
   }
 
   return processed;

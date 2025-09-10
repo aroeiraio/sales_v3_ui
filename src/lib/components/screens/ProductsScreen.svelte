@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
-  import { Search, X, Plus, Menu, Coffee, Sandwich, Candy, Salad, Package, ImageOff } from 'lucide-svelte';
+  import { Search, X, Plus, Menu, Package, ImageOff, HelpCircle } from 'lucide-svelte';
   import { visualSettingsService } from '../../services/visualSettings';
   import { productsService, type Product, type Category } from '../../services/products';
   import { cartService } from '../../services/cart';
   import { sessionService } from '../../services/session';
   import { errorDialogService } from '../../services/errorDialog';
+  import { toastService } from '../../services/toast';
   import ProductDialog from '../ui/ProductDialog.svelte';
   import VirtualKeyboard from '../ui/VirtualKeyboard.svelte';
 
@@ -24,31 +25,30 @@
   let cartTotal = 0;
   let isVirtualKeyboardOpen = false;
   let searchInputRef: HTMLInputElement;
+  let currentTime = '';
 
   // Session timeout handling
   let sessionTimeoutId: NodeJS.Timeout | null = null;
   let progressIntervalId: NodeJS.Timeout | null = null;
   let sessionStartTime = 0;
   let showProgressBar = false;
+  let showTimeoutDialog = false;
   let progressWidth = 100;
   const SESSION_TIMEOUT = 60000; // 60 seconds
   const PROGRESS_THRESHOLD = 11000; // Show progress bar when less than 11 seconds remain
 
-  const categoryIcons = {
-    'BEBIDAS': Coffee,
-    'Destaques': Coffee,
-    'CATEGORIA 2': Sandwich,
-    'SNACKS': Candy,
-    'LANCHES': Sandwich,
-    'DOCES': Candy,
-    'SAUDÁVEIS': Salad,
-    'COMBOS': Package
-  };
 
   onMount(async () => {
     try {
       // Load interface settings
       settings = await visualSettingsService.loadSettings();
+      
+      // Initialize time display
+      function updateTime() {
+        currentTime = new Date().toLocaleTimeString('pt-BR');
+      }
+      updateTime();
+      const timeInterval = setInterval(updateTime, 1000);
       
       // Load categories
       categories = await productsService.getCategories();
@@ -73,15 +73,21 @@
       // Add resize listener to handle screen size changes
       window.addEventListener('resize', updateSidebarStateForScreenSize);
 
+      // Cleanup on component destroy
+      return () => {
+        clearInterval(timeInterval);
+        window.removeEventListener('resize', updateSidebarStateForScreenSize);
+      };
+
     } catch (error) {
       console.error('Failed to load products data:', error);
       errorDialogService.showError({
         title: 'Erro ao Carregar Produtos',
-        message: 'Não foi possível carregar a lista de produtos. Tente novamente.',
+        message: 'Não foi possível carregar a lista de produtos.',
         actions: [
           {
-            label: 'Tentar Novamente',
-            action: () => window.location.reload(),
+            label: 'Fechar',
+            action: () => {},
             variant: 'primary'
           }
         ]
@@ -113,8 +119,8 @@
         message: 'Não foi possível carregar os produtos desta categoria.',
         actions: [
           {
-            label: 'Tentar Novamente',
-            action: () => loadProducts(categoryId),
+            label: 'Fechar',
+            action: () => {},
             variant: 'primary'
           }
         ]
@@ -139,11 +145,11 @@
       console.error('Failed to search products:', error);
       errorDialogService.showError({
         title: 'Erro na Busca',
-        message: 'Não foi possível realizar a busca. Tente novamente.',
+        message: 'Não foi possível realizar a busca.',
         actions: [
           {
-            label: 'Tentar Novamente',
-            action: () => searchProducts(expression),
+            label: 'Fechar',
+            action: () => {},
             variant: 'primary'
           }
         ]
@@ -273,6 +279,7 @@
     
     sessionStartTime = Date.now();
     showProgressBar = false;
+    showTimeoutDialog = false;
     progressWidth = 100;
     
     sessionTimeoutId = setTimeout(() => {
@@ -294,10 +301,14 @@
         if (!showProgressBar) {
           showProgressBar = true;
         }
+        if (!showTimeoutDialog) {
+          showTimeoutDialog = true;
+        }
         // Calculate progress width (100% to 0% over the last 11 seconds)
         progressWidth = Math.max(0, (remaining / PROGRESS_THRESHOLD) * 100);
       } else {
         showProgressBar = false;
+        showTimeoutDialog = false;
         progressWidth = 100;
       }
     }, 100); // Update every 100ms for smooth animation
@@ -307,16 +318,18 @@
     startSessionTimeout();
   }
 
+  function continueSession() {
+    showTimeoutDialog = false;
+    resetSessionTimeout();
+  }
+
   // Reset timeout on any user interaction
   function handleUserInteraction() {
     sessionService.resetTimeout();
     resetSessionTimeout();
   }
 
-  function getCategoryIcon(categoryName: string) {
-    const IconComponent = categoryIcons[categoryName] || Package;
-    return IconComponent;
-  }
+
 
   function formatPrice(price: number): string {
     return productsService.formatPrice(price);
@@ -356,20 +369,41 @@
   style:background-color={settings?.background_color || 'var(--background)'}
   style:background-image={settings?.background_image ? `url(${settings.background_image})` : 'none'}
 >
+  <!-- Abstract Background Pattern -->
+  <div class="abstract-background">
+    <div class="floating-shape shape-1"></div>
+    <div class="floating-shape shape-2"></div>
+    <div class="floating-shape shape-3"></div>
+    <div class="floating-shape shape-4"></div>
+    <div class="floating-shape shape-5"></div>
+    <div class="floating-shape shape-6"></div>
+  </div>
   <!-- Session Timeout Progress Bar -->
   {#if showProgressBar}
     <div class="timeout-progress-bar">
       <div class="progress-fill" style:width="{progressWidth}%"></div>
     </div>
   {/if}
+  
+  <!-- Timeout Dialog -->
+  {#if showTimeoutDialog}
+    <div class="timeout-dialog-backdrop">
+      <div class="timeout-dialog">
+        <div class="dialog-icon">
+          <HelpCircle size={48} />
+        </div>
+        <h3 class="dialog-title">Ei! Tem alguém aí?</h3>
+        <p class="dialog-message">Clique para continuar</p>
+        <button class="continue-button" onclick={continueSession}>
+          OK
+        </button>
+      </div>
+    </div>
+  {/if}
 
   <!-- Header -->
   <header class="header" style:background-color={settings?.font_color || 'var(--primary)'}>
     <div class="header-content">
-      <button class="mobile-menu-toggle" onclick={toggleDrawer} aria-label="Abrir menu">
-        <Menu size={24} />
-      </button>
-
       {#if settings?.logotype_image}
         <img src={settings.logotype_image} alt="Logo" class="header-logo" />
       {:else}
@@ -394,6 +428,11 @@
           </button>
         {/if}
       </div>
+      
+      <!-- Clock -->
+      <div class="header-clock">
+        <div class="clock-display">{currentTime}</div>
+      </div>
     </div>
   </header>
 
@@ -412,14 +451,12 @@
         </div>
         <div class="categories">
           {#each categories as category}
-            {@const IconComponent = getCategoryIcon(category.name)}
             <button 
               class="category-button"
               class:active={selectedCategory === category.categoryId}
               onclick={() => handleCategorySelect(category.categoryId)}
             >
-              <IconComponent size={20} />
-              {category.name}
+              <span class="category-name">{category.name}</span>
             </button>
           {/each}
         </div>
@@ -429,9 +466,14 @@
     <!-- Products Area -->
     <main class="products-area">
       <div class="products-header">
-        <h2 class="products-title">
-          {categories.find(c => c.categoryId === selectedCategory)?.name || 'Produtos'}
-        </h2>
+        <div class="products-header-left">
+          <button class="menu-toggle" onclick={toggleDrawer} aria-label="Abrir/fechar menu">
+            <Menu size={20} />
+          </button>
+          <h2 class="products-title">
+            {categories.find(c => c.categoryId === selectedCategory)?.name || 'Produtos'}
+          </h2>
+        </div>
         {#if isSearching}
           <div class="search-indicator">Buscando...</div>
         {/if}
@@ -498,7 +540,7 @@
   {#if cartCount > 0}
     <div class="cart-bar" transition:slide={{ duration: 400, axis: 'y' }}>
       <div class="cart-info">
-        <span class="cart-count">({cartCount})</span>
+        <span class="cart-count">{cartCount}</span>
         <span class="cart-total">{formatPrice(cartTotal)}</span>
       </div>
       <button class="view-cart-button" onclick={() => window.location.href = '/cart'}>
@@ -532,6 +574,96 @@
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Abstract Background Shapes */
+  .abstract-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .floating-shape {
+    position: absolute;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(0, 129, 167, 0.08), rgba(0, 175, 185, 0.12));
+    animation: float 20s infinite ease-in-out;
+    backdrop-filter: blur(1px);
+  }
+
+  .shape-1 {
+    width: 120px;
+    height: 120px;
+    top: 10%;
+    left: 80%;
+    animation-delay: 0s;
+  }
+
+  .shape-2 {
+    width: 80px;
+    height: 80px;
+    top: 60%;
+    left: 5%;
+    animation-delay: -5s;
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  }
+
+  .shape-3 {
+    width: 200px;
+    height: 200px;
+    top: 30%;
+    right: 85%;
+    animation-delay: -10s;
+    opacity: 0.6;
+  }
+
+  .shape-4 {
+    width: 60px;
+    height: 60px;
+    bottom: 20%;
+    right: 15%;
+    animation-delay: -15s;
+    border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%;
+  }
+
+  .shape-5 {
+    width: 140px;
+    height: 140px;
+    bottom: 40%;
+    left: 75%;
+    animation-delay: -8s;
+    opacity: 0.4;
+  }
+
+  .shape-6 {
+    width: 100px;
+    height: 100px;
+    top: 80%;
+    left: 40%;
+    animation-delay: -12s;
+    border-radius: 38% 62% 63% 37% / 70% 33% 67% 30%;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+      opacity: 0.3;
+    }
+    33% {
+      transform: translateY(-30px) rotate(120deg);
+      opacity: 0.6;
+    }
+    66% {
+      transform: translateY(-60px) rotate(240deg);
+      opacity: 0.4;
+    }
   }
 
   /* Session Timeout Progress Bar */
@@ -562,20 +694,114 @@
       background-position: 200% 0;
     }
   }
+
+  /* Timeout Dialog Styles */
+  .timeout-dialog-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .timeout-dialog {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+    max-width: 400px;
+    width: 90%;
+  }
+
+  .dialog-icon {
+    color: var(--primary);
+    margin-bottom: 1rem;
+  }
+
+  .dialog-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--foreground);
+    margin: 0 0 1rem 0;
+  }
+
+  .dialog-message {
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    margin: 0 0 2rem 0;
+  }
+
+  .continue-button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
+  }
+
+  .continue-button:hover {
+    background: var(--primary-hover, #006b8a);
+    transform: translateY(-1px);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
   
   .header {
     padding: 1rem;
     color: white;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 100;
     box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px);
+    background: rgba(0, 129, 167, 0.95);
   }
   
   .header-content {
     display: flex;
     align-items: center;
     gap: 1rem;
+    justify-content: space-between;
+  }
+
+  .header-clock {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .clock-display {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: center;
   }
 
   .mobile-menu-toggle {
@@ -598,13 +824,15 @@
   }
   
   .header-logo {
-    height: 40px;
+    height: 50px;
+    margin-right: 1rem;
   }
   
   .header-logo-text {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     font-weight: 700;
     white-space: nowrap;
+    margin-right: 1rem;
   }
   
   .search-bar {
@@ -694,17 +922,24 @@
   
   .sidebar {
     width: 280px;
-    background: white;
-    border-right: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.7);
+    border-right: 1px solid rgba(226, 232, 240, 0.5);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     flex-shrink: 0;
+    backdrop-filter: blur(16px);
+    z-index: 50;
   }
 
   .sidebar-header {
-    padding: 1.5rem 1rem;
-    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 1rem 1rem 1rem;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.4);
+    background: rgba(245, 245, 245, 0.3);
+    backdrop-filter: blur(8px);
+    height: 72px;
+    display: flex;
+    align-items: center;
   }
 
   .sidebar-header h3 {
@@ -717,35 +952,53 @@
   .categories {
     padding: 1rem;
     flex: 1;
+    background: rgba(248, 250, 252, 0.4);
+    backdrop-filter: blur(4px);
   }
   
   .category-button {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 1rem;
+    justify-content: center;
+    padding: 0.875rem 1rem;
     width: 100%;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    margin-bottom: 0.75rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    border-radius: 0.5rem;
+    margin-bottom: 0.625rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 44px;
     color: var(--foreground);
     font-weight: 500;
+    font-size: 0.95rem;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+
+  .category-name {
+    text-align: center;
   }
   
   .category-button:hover {
-    background: var(--accent);
-    border-color: var(--accent);
-    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0, 129, 167, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
   
   .category-button.active {
-    background: var(--primary);
+    background: rgba(0, 129, 167, 0.9);
     color: white;
-    border-color: var(--primary);
+    border-color: rgba(0, 129, 167, 0.8);
+    box-shadow: 0 2px 8px rgba(0, 129, 167, 0.2);
+    backdrop-filter: blur(12px);
+  }
+
+  .category-button.active:hover {
+    background: rgba(0, 129, 167, 0.95);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 129, 167, 0.3);
   }
   
   .products-area {
@@ -753,14 +1006,47 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    z-index: 10;
+    position: relative;
   }
   
   .products-header {
-    padding: 1rem 2rem;
-    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 2rem 1rem 2rem;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.4);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    height: 72px;
+  }
+
+  .products-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  .menu-toggle:hover {
+    background: var(--muted);
+    border-color: var(--accent);
+  }
+
+  .menu-toggle:active {
+    transform: scale(0.95);
   }
   
   .products-title {
@@ -811,33 +1097,38 @@
   }
   
   .product-card {
-    background: white;
-    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 0.75rem;
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
-    min-height: 260px;
+    min-height: 280px;
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(226, 232, 240, 0.6);
+    backdrop-filter: blur(10px);
+    position: relative;
   }
   
   .product-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--accent);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 129, 167, 0.3);
+    background: rgba(255, 255, 255, 0.98);
   }
   
   .product-image {
-    width: 100%;
+    width: calc(100% - 1.5rem);
     height: 160px;
     position: relative;
     overflow: hidden;
-    background: var(--muted, #f1f5f9);
+    background: linear-gradient(135deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.9));
     display: flex;
     align-items: center;
     justify-content: center;
+    margin: 0.75rem 0.75rem 0;
+    border-radius: 0.5rem;
   }
   
   .product-image img {
@@ -889,16 +1180,24 @@
   }
   
   .product-info {
-    padding: 1rem;
+    padding: 1.25rem 1.25rem 1rem;
     flex: 1;
     display: flex;
     flex-direction: column;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(8px);
   }
   
   .product-name {
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
     color: var(--foreground);
+    font-size: 1rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   
   .product-price {
@@ -912,22 +1211,24 @@
   }
   
   .add-to-cart {
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--primary), rgba(0, 129, 167, 0.8));
     color: white;
     border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 129, 167, 0.2);
   }
   
   .add-to-cart:hover:not(:disabled) {
-    transform: scale(1.1);
-    background: var(--bittersweet);
+    transform: translateY(-1px) scale(1.05);
+    background: linear-gradient(135deg, rgba(0, 129, 167, 0.9), var(--primary));
+    box-shadow: 0 4px 16px rgba(0, 129, 167, 0.3);
   }
 
   .add-to-cart:disabled {
@@ -972,13 +1273,14 @@
     background: var(--bittersweet);
     color: white;
     border: none;
-    padding: 1rem 2.5rem;
-    border-radius: var(--radius-lg);
+    padding: 1rem 2rem;
+    border-radius: var(--radius);
     font-weight: 600;
     font-size: 1.125rem;
     cursor: pointer;
     transition: all 0.2s ease;
     min-height: 48px;
+    min-width: 250px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1022,6 +1324,24 @@
 
     .header {
       padding: 1rem;
+    }
+
+    .header-content {
+      gap: 0.5rem;
+    }
+
+    .header-logo {
+      height: 40px;
+      margin-right: 0.5rem;
+    }
+
+    .header-logo-text {
+      font-size: 1.5rem;
+      margin-right: 0.5rem;
+    }
+
+    .clock-display {
+      font-size: 0.75rem;
     }
     
     .main-content {

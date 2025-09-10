@@ -23,10 +23,12 @@
     }
     
     unsubscribe = errorDialogService.subscribe((newDialogs) => {
+      console.log('ErrorDialog: Received new dialogs:', newDialogs);
       dialogs = newDialogs;
     });
     
     dialogs = errorDialogService.getDialogs();
+    console.log('ErrorDialog: Initial dialogs:', dialogs);
   });
 
   onDestroy(() => {
@@ -36,20 +38,28 @@
   });
 
   function handleAction(dialog: ErrorDialogConfig, action: any) {
+    console.log('handleAction called:', { dialog, action });
     try {
       action.action();
+      console.log('Action executed successfully');
     } catch (error) {
       console.error('Error in dialog action:', error);
     }
     
+    console.log('Checking autoClose:', action.autoClose);
     if (action.autoClose !== false) {
+      console.log('Calling closeDialog for action');
       errorDialogService.closeDialog(dialog);
     }
   }
 
   function handleClose(dialog: ErrorDialogConfig) {
+    console.log('handleClose called:', { dialog, persistent: dialog.persistent });
     if (!dialog.persistent) {
+      console.log('Calling closeDialog for close');
       errorDialogService.closeDialog(dialog);
+    } else {
+      console.log('Dialog is persistent, not closing');
     }
   }
 
@@ -106,7 +116,7 @@
 
 {#if dialogs.length > 0}
   <div class="dialog-overlay" role="dialog" aria-modal="true">
-    {#each dialogs as dialog, index (dialog)}
+    {#each dialogs as dialog, index (dialog.id || dialog.title + index)}
       <div 
         class="error-dialog"
         style:z-index={1000 + index}
@@ -161,6 +171,16 @@
           </p>
         </div>
 
+        <!-- Debug info -->
+        <div style="display: none;">
+          {console.log('Rendering dialog:', { 
+            title: dialog.title, 
+            persistent: dialog.persistent, 
+            hasActions: dialog.actions?.length > 0,
+            actions: dialog.actions 
+          })}
+        </div>
+
         {#if dialog.actions && dialog.actions.length > 0}
           <div class="dialog-actions">
             {#each dialog.actions as action, actionIndex}
@@ -183,10 +203,14 @@
               class="action-button primary"
               onclick={() => handleClose(dialog)}
               type="button"
-              autofocus
             >
               OK
             </button>
+          </div>
+        {:else}
+          <!-- Debug: persistent dialog without actions -->
+          <div style="color: red; font-size: 12px; padding: 8px;">
+            DEBUG: Persistent dialog without actions - no buttons shown
           </div>
         {/if}
       </div>
@@ -217,8 +241,6 @@
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), var(--shadow-xl);
     max-width: 500px;
     width: 100%;
-    max-height: 80vh;
-    overflow-y: auto;
     animation: dialogSlideIn 0.3s ease-out;
     outline: none;
     position: relative;

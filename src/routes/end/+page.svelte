@@ -6,7 +6,7 @@
   
   let isVisible = false;
   let orderNumber = '#' + Math.floor(Math.random() * 900000 + 100000).toString();
-  let countdown = 10;
+  let countdown = 20;
   let countdownInterval: NodeJS.Timeout;
 
   onMount(() => {
@@ -47,11 +47,24 @@
       <div class="background-pattern"></div>
       <div class="content-wrapper">
         <div class="success-animation" class:visible={isVisible}>
+          <!-- Confetti particles -->
+          <div class="confetti-container">
+            {#each Array(12) as _, i}
+              <div class="confetti confetti-{i}" style="--delay: {i * 0.1}s"></div>
+            {/each}
+          </div>
+          
+          <!-- Success glow effect -->
+          <div class="success-glow"></div>
+          
+          <!-- Package delivery animation -->
           <div class="package-container">
+            <div class="package-pulse"></div>
             <div class="package-background"></div>
             <div class="package-icon-wrapper">
               <Package size={64} class="package-icon" strokeWidth={2.5} color="white" stroke="white" />
             </div>
+            <div class="delivery-checkmark">✓</div>
           </div>
         </div>
 
@@ -180,10 +193,46 @@
   }
 
   .success-animation {
-    width: 120px;
-    height: 120px;
+    width: 160px;
+    height: 160px;
     margin: 0 auto 2.5rem;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .confetti-container {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .confetti {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+    border-radius: 2px;
+    opacity: 0;
+  }
+
+  .success-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, transparent 70%);
+    opacity: 0;
+    z-index: 2;
   }
 
   .package-container {
@@ -194,6 +243,39 @@
     align-items: center;
     justify-content: center;
     margin: 0 auto;
+    z-index: 5;
+  }
+
+  .package-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    border: 3px solid var(--success);
+    border-radius: 24px;
+    opacity: 0;
+    z-index: 3;
+  }
+
+  .delivery-checkmark {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 40px;
+    height: 40px;
+    background: var(--success);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    transform: scale(0);
+    z-index: 15;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
   }
 
   .package-background {
@@ -210,8 +292,20 @@
     z-index: 5;
   }
 
+  .success-animation.visible .success-glow {
+    animation: glow-appear 0.8s ease-out 0.2s forwards;
+  }
+
+  .success-animation.visible .confetti {
+    animation: confetti-burst 1.5s ease-out forwards;
+  }
+
   .success-animation.visible .package-background {
-    animation: package-background-appear 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    animation: package-background-appear 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s forwards;
+  }
+
+  .success-animation.visible .package-pulse {
+    animation: package-pulse-effect 2s ease-out 1s infinite;
   }
 
   .package-icon-wrapper {
@@ -240,20 +334,40 @@
   }
 
   .success-animation.visible .package-icon-wrapper {
-    animation: package-icon-appear 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.7s forwards;
+    animation: package-icon-appear 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.9s forwards;
   }
 
-  @keyframes circle-scale {
+  .success-animation.visible .delivery-checkmark {
+    animation: checkmark-appear 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) 1.4s forwards;
+  }
+
+  @keyframes glow-appear {
     0% {
-      transform: scale(0);
       opacity: 0;
+      transform: translate(-50%, -50%) scale(0.8);
     }
     50% {
-      transform: scale(1.1);
+      opacity: 0.8;
+      transform: translate(-50%, -50%) scale(1.1);
     }
     100% {
-      transform: scale(1);
+      opacity: 0.4;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  @keyframes confetti-burst {
+    0% {
+      opacity: 0;
+      transform: translateY(0) rotate(0deg) scale(0);
+    }
+    10% {
       opacity: 1;
+      transform: translateY(-20px) rotate(90deg) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-100px) rotate(180deg) scale(0.5);
     }
   }
 
@@ -287,20 +401,49 @@
     }
   }
 
-  @keyframes scale {
-    0%, 100% {
-      transform: none;
+  @keyframes package-pulse-effect {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1);
     }
     50% {
-      transform: scale3d(1.1, 1.1, 1);
+      opacity: 0.6;
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1.2);
     }
   }
 
-  @keyframes fill {
+  @keyframes checkmark-appear {
+    0% {
+      opacity: 0;
+      transform: scale(0) rotate(-180deg);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.3) rotate(-90deg);
+    }
     100% {
-      box-shadow: inset 0px 0px 0px 60px var(--success, #10B981);
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
     }
   }
+
+  /* Individual confetti positioning */
+  .confetti-0 { top: 20%; left: 30%; background: var(--primary); animation-delay: calc(var(--delay) + 0.1s); }
+  .confetti-1 { top: 15%; left: 70%; background: var(--secondary); animation-delay: calc(var(--delay) + 0.2s); }
+  .confetti-2 { top: 25%; left: 10%; background: var(--accent); animation-delay: calc(var(--delay) + 0.15s); }
+  .confetti-3 { top: 30%; left: 80%; background: var(--success); animation-delay: calc(var(--delay) + 0.25s); }
+  .confetti-4 { top: 10%; left: 50%; background: var(--primary); animation-delay: calc(var(--delay) + 0.3s); }
+  .confetti-5 { top: 35%; left: 20%; background: var(--secondary); animation-delay: calc(var(--delay) + 0.35s); }
+  .confetti-6 { top: 40%; left: 60%; background: var(--accent); animation-delay: calc(var(--delay) + 0.4s); }
+  .confetti-7 { top: 45%; left: 40%; background: var(--success); animation-delay: calc(var(--delay) + 0.45s); }
+  .confetti-8 { top: 20%; left: 90%; background: var(--primary); animation-delay: calc(var(--delay) + 0.5s); }
+  .confetti-9 { top: 50%; left: 15%; background: var(--secondary); animation-delay: calc(var(--delay) + 0.55s); }
+  .confetti-10 { top: 55%; left: 75%; background: var(--accent); animation-delay: calc(var(--delay) + 0.6s); }
+  .confetti-11 { top: 60%; left: 45%; background: var(--success); animation-delay: calc(var(--delay) + 0.65s); }
 
   .thank-you-title {
     font-size: 2.5rem;

@@ -48,7 +48,7 @@ Initial landing screen that can function as both a digital signage display and e
 4. **Timer Setup**: Initializes refresh timers
 
 #### **User Actions**
-- **"Começar Compra" Button**:
+- **"Começar Compra" Button** and **Video Click**:
   1. Stops any video playback
   2. Calls `sessionService.startSession()`
   3. Navigates to `/products` via `window.location.href`

@@ -1,4 +1,5 @@
 export interface ErrorDialogConfig {
+  id?: string;
   type: 'error' | 'warning' | 'info' | 'success';
   title: string;
   message: string;
@@ -19,9 +20,12 @@ export interface ErrorDialogAction {
 class ErrorDialogService {
   private dialogs: ErrorDialogConfig[] = [];
   private subscribers: ((dialogs: ErrorDialogConfig[]) => void)[] = [];
+  private nextId = 0;
 
   showError(config: Omit<ErrorDialogConfig, 'type'>): void {
-    console.log('ErrorDialogService.showError called:', config);
+    console.log('🚨 ErrorDialogService.showError called:', config);
+    console.trace('Error dialog creation stack trace:');
+    
     const dialog: ErrorDialogConfig = {
       type: 'error',
       autoClose: false,
@@ -29,6 +33,7 @@ class ErrorDialogService {
       ...config
     };
     
+    console.log('🚨 Final dialog config:', dialog);
     this.addDialog(dialog);
   }
 
@@ -69,6 +74,8 @@ class ErrorDialogService {
   }
 
   private addDialog(dialog: ErrorDialogConfig): void {
+    // Generate unique ID for dialog
+    dialog.id = `dialog-${this.nextId++}`;
     console.log('Adding dialog:', dialog);
     this.dialogs.push(dialog);
     this.notifySubscribers();
@@ -82,10 +89,19 @@ class ErrorDialogService {
   }
 
   closeDialog(dialog: ErrorDialogConfig): void {
-    const index = this.dialogs.indexOf(dialog);
+    console.log('closeDialog called:', dialog);
+    console.log('Current dialogs before:', this.dialogs.length);
+    
+    // Find dialog by ID instead of object reference
+    const index = this.dialogs.findIndex(d => d.id === dialog.id);
+    console.log('Dialog index by ID:', index);
+    
     if (index > -1) {
       this.dialogs.splice(index, 1);
+      console.log('Dialog removed, remaining:', this.dialogs.length);
       this.notifySubscribers();
+    } else {
+      console.log('Dialog not found in array by ID:', dialog.id);
     }
   }
 

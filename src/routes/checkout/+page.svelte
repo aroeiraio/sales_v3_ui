@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
   import { ArrowLeft } from 'lucide-svelte';
@@ -10,6 +10,19 @@
   import { errorDialogService } from '$lib/services/errorDialog';
   import { deliveryService, type DeliveryStatus, type DeliveryStep } from '$lib/services/delivery';
   import ProgressSteps from '$lib/components/ui/ProgressSteps.svelte';
+  import TimeoutDialog from '$lib/components/checkout/shared/TimeoutDialog.svelte';
+  import TimeoutProgressBar from '$lib/components/checkout/shared/TimeoutProgressBar.svelte';
+  import CheckoutHeader from '$lib/components/checkout/shared/CheckoutHeader.svelte';
+  import CheckoutSummary from '$lib/components/checkout/shared/CheckoutSummary.svelte';
+  import PixQrCodePayment from '$lib/components/checkout/payments/PixQrCodePayment.svelte';
+  import CardPayment from '$lib/components/checkout/payments/CardPayment.svelte';
+  import PaymentProcessing from '$lib/components/checkout/payments/PaymentProcessing.svelte';
+  import PaymentSuccess from '$lib/components/checkout/payments/PaymentSuccess.svelte';
+  import PaymentFailure from '$lib/components/checkout/payments/PaymentFailure.svelte';
+  import PaymentMethodSelection from '$lib/components/checkout/PaymentMethodSelection.svelte';
+  import PaymentTimeout from '$lib/components/checkout/PaymentTimeout.svelte';
+  import PixInstructionsPopup from '$lib/components/checkout/PixInstructionsPopup.svelte';
+  import { formatPrice, getDisplayPaymentMethods } from '$lib/utils/checkout';
 
   let selectedPayment: string = '';
   let isProcessing: boolean = false;
@@ -26,6 +39,20 @@
   let countdownTimer: number = 60;
   let qrCodeCountdownInterval: NodeJS.Timeout | null = null;
   let showInstructionsPopup: boolean = false;
+  
+  // Card payment timeout handling
+  let cardPaymentTimer: number = 180;
+  let cardPaymentCountdownInterval: NodeJS.Timeout | null = null;
+  
+  // Session timeout handling
+  let sessionTimeoutId: NodeJS.Timeout | null = null;
+  let progressIntervalId: NodeJS.Timeout | null = null;
+  let sessionStartTime = 0;
+  let showTimeoutDialog = false;
+  let showProgressBar = false;
+  let progressWidth = 100;
+  const SESSION_TIMEOUT = 60000; // 60 seconds
+  const PROGRESS_THRESHOLD = 11000; // Show dialog when less than 11 seconds remain
 
   const paymentMethods = paymentService.getPaymentMethods();
 
@@ -93,9 +120,13 @@
           
           // Start 60-second countdown timer
           startQRCodeCountdown();
+        } else if (newState === 'insert_tap_card') {
+          // Handle card payment state - start 180-second timeout
+          startCardPaymentCountdown();
         } else if (newState === 'success') {
-          // Clear countdown timer on success
+          // Clear countdown timers on success
           clearQRCodeCountdown();
+          clearCardPaymentCountdown();
           // Handle successful payment
           paymentResult = {
             transactionId: data?.transactionId || `success-${Date.now()}`,
@@ -129,8 +160,9 @@
             }
           });
         } else if (newState === 'failed') {
-          // Clear countdown timer on failure
+          // Clear countdown timers on failure
           clearQRCodeCountdown();
+          clearCardPaymentCountdown();
           // Handle failed payment
           paymentResult = {
             transactionId: `failed-${Date.now()}`,
@@ -143,8 +175,9 @@
             resetPaymentState();
           }, 3000);
         } else if (newState === 'retry') {
-          // Clear countdown timer on retry
+          // Clear countdown timers on retry
           clearQRCodeCountdown();
+          clearCardPaymentCountdown();
           // Handle retry state
           paymentResult = {
             transactionId: `retry-${Date.now()}`,
@@ -159,13 +192,32 @@
         currentTime = new Date().toLocaleTimeString('pt-BR');
       }, 1000);
 
+      // Start session timeout only on initial state
+      startSessionTimeout();
+      
       // Cleanup on unmount
       return () => {
         clearInterval(timeInterval);
         clearQRCodeCountdown();
+        clearCardPaymentCountdown();
         paymentService.stopPolling();
         deliveryService.stopPolling();
+        if (sessionTimeoutId) {
+          clearTimeout(sessionTimeoutId);
+        }
+        if (progressIntervalId) {
+          clearInterval(progressIntervalId);
+        }
       };
+    }
+  });
+
+  onDestroy(() => {
+    if (sessionTimeoutId) {
+      clearTimeout(sessionTimeoutId);
+    }
+    if (progressIntervalId) {
+      clearInterval(progressIntervalId);
     }
   });
 
@@ -185,6 +237,8 @@
     
     try {
       isProcessing = true;
+      // Cancel timeout when starting payment process
+      cancelSessionTimeout();
       
       const result = await paymentService.processPayment(selectedPayment);
       paymentResult = result;
@@ -207,6 +261,8 @@
   function resetPaymentState() {
     paymentState = 'idle';
     selectedPayment = '';
+    // Restart timeout when returning to idle state
+    startSessionTimeout();
     isProcessing = false;
     paymentResult = null;
     paymentService.resetPayment();
@@ -225,9 +281,27 @@
     isProcessing = false;
   }
 
-  function cancelPayment() {
+  async function cancelPayment() {
+    // Cancel active payment if in payment context
+    const activePaymentStates = ['processing', 'show_qrcode', 'insert_tap_card', 'wait'];
+    if (activePaymentStates.includes(paymentState)) {
+      try {
+        await paymentService.cancelPayment();
+        console.log('Payment cancelled by user');
+      } catch (error) {
+        console.error('Error cancelling payment:', error);
+      }
+    }
+    
+    // Clear all timers
+    clearQRCodeCountdown();
+    clearCardPaymentCountdown();
+    
+    // Stop polling and reset payment service
     paymentService.stopPolling();
     paymentService.resetPayment();
+    
+    // Return to cart
     goto('/cart');
   }
 
@@ -236,19 +310,83 @@
     goto('/cart');
   }
 
-  function formatPrice(price: number | undefined | null): string {
-    if (price === undefined || price === null || isNaN(price)) {
-      return 'R$ 0,00';
-    }
-    return price.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    });
-  }
 
   // Reset timeout on any user interaction
   function handleUserInteraction() {
     sessionService.resetTimeout();
+    // Only reset timeout dialog if we're in idle state (payment method selection)
+    if (paymentState === 'idle') {
+      resetSessionTimeout();
+    }
+  }
+
+  function startSessionTimeout() {
+    if (sessionTimeoutId) {
+      clearTimeout(sessionTimeoutId);
+    }
+    if (progressIntervalId) {
+      clearInterval(progressIntervalId);
+    }
+    
+    sessionStartTime = Date.now();
+    showTimeoutDialog = false;
+    showProgressBar = false;
+    progressWidth = 100;
+    
+    sessionTimeoutId = setTimeout(() => {
+      console.log('Session timeout reached, ending session');
+      sessionService.endSession();
+      goto('/');
+    }, SESSION_TIMEOUT);
+    
+    // Start progress monitoring
+    startProgressMonitoring();
+  }
+
+  function startProgressMonitoring() {
+    progressIntervalId = setInterval(() => {
+      const elapsed = Date.now() - sessionStartTime;
+      const remaining = SESSION_TIMEOUT - elapsed;
+      
+      if (remaining <= PROGRESS_THRESHOLD && paymentState === 'idle') {
+        if (!showProgressBar) {
+          showProgressBar = true;
+        }
+        if (!showTimeoutDialog) {
+          showTimeoutDialog = true;
+        }
+        // Calculate progress width (100% to 0% over the last 11 seconds)
+        progressWidth = Math.max(0, (remaining / PROGRESS_THRESHOLD) * 100);
+      } else {
+        showProgressBar = false;
+        showTimeoutDialog = false;
+        progressWidth = 100;
+      }
+    }, 100); // Update every 100ms for smooth animation
+  }
+
+  function resetSessionTimeout() {
+    // Only start timeout if in idle state
+    if (paymentState === 'idle') {
+      startSessionTimeout();
+    }
+  }
+
+  function continueSession() {
+    showTimeoutDialog = false;
+    resetSessionTimeout();
+  }
+
+  function cancelSessionTimeout() {
+    if (sessionTimeoutId) {
+      clearTimeout(sessionTimeoutId);
+      sessionTimeoutId = null;
+    }
+    if (progressIntervalId) {
+      clearInterval(progressIntervalId);
+      progressIntervalId = null;
+    }
+    showTimeoutDialog = false;
   }
 
   // Debug functions for testing payment states
@@ -360,48 +498,34 @@
     }
   }
 
-  // Convert API payment methods to UI format
-  function getDisplayPaymentMethods() {
-    const displayMethods = [];
-    
-    for (const broker of availablePaymentMethods) {
-      if (!broker.available) continue;
+  function startCardPaymentCountdown() {
+    cardPaymentTimer = 180;
+    cardPaymentCountdownInterval = setInterval(() => {
+      cardPaymentTimer--;
       
-      for (const method of broker.methods) {
-        let displayMethod = {
-          id: `${broker.broker}-${method}`,
-          broker: broker.broker,
-          method: method,
-          name: '',
-          description: '',
-          icon: ''
+      if (cardPaymentTimer <= 0) {
+        clearCardPaymentCountdown();
+        // Cancel the card payment
+        paymentService.cancelPayment();
+        paymentService.resetPayment();
+        // Redirect to payment timeout screen
+        paymentState = 'payment_timeout';
+        paymentResult = {
+          transactionId: `card-timeout-${Date.now()}`,
+          status: 'failed',
+          message: 'Tempo esgotado para pagamento com cartão'
         };
-        
-        // Map broker and method to display names
-        if (broker.broker === 'MERCADOPAGO') {
-          displayMethod.name = 'PIX';
-          displayMethod.description = 'Pagamento instantâneo via QR Code';
-          displayMethod.icon = 'qr-code';
-        } else if (broker.broker === 'MERCADOPAGO_PINPAD') {
-          if (method === 'credit') {
-            displayMethod.name = 'Cartão de Crédito';
-            displayMethod.description = 'Insira ou aproxime seu cartão';
-            displayMethod.icon = 'credit-card';
-          } else if (method === 'debit') {
-            displayMethod.name = 'Cartão de Débito';
-            displayMethod.description = 'Insira ou aproxime seu cartão';
-            displayMethod.icon = 'landmark';
-          }
-        }
-        
-        if (displayMethod.name) {
-          displayMethods.push(displayMethod);
-        }
       }
-    }
-    
-    return displayMethods;
+    }, 1000);
   }
+
+  function clearCardPaymentCountdown() {
+    if (cardPaymentCountdownInterval) {
+      clearInterval(cardPaymentCountdownInterval);
+      cardPaymentCountdownInterval = null;
+    }
+  }
+
 </script>
 
 <svelte:head>
@@ -411,499 +535,84 @@
 <svelte:window onclick={handleUserInteraction} onkeydown={handleUserInteraction} />
 
 <div class="checkout-container">
-  <header class="header">
-    <div class="header-top">
-      <div></div>
-      <div class="time">{currentTime}</div>
-    </div>
-    <div class="header-main">
-      {#if paymentState === 'idle' || paymentState === 'retry' || paymentState === 'payment_timeout'}
-        <button class="back-button" onclick={goBack} disabled={isProcessing}>
-          <ArrowLeft size={28} />
-          <span class="back-text">Voltar</span>
-        </button>
-      {/if}
-      <h1 class="page-title">Pagamento</h1>
-    </div>
-  </header>
+  <CheckoutHeader 
+    showBackButton={paymentState === 'idle' || paymentState === 'retry' || paymentState === 'payment_timeout'}
+    isProcessing={isProcessing}
+    onBack={goBack}
+    title="Pagamento"
+    currentTime={currentTime}
+  />
 
   <main class="main-content">
     {#if paymentState === 'idle'}
-      <section class="section">
-        <h2 class="section-title">Escolha a forma de pagamento</h2>
-        <div class="payment-methods">
-          {#each getDisplayPaymentMethods() as method}
-            <button 
-              class="payment-method"
-              class:selected={selectedPayment === method.id}
-              onclick={() => selectPaymentMethod(method.id)}
-              disabled={isProcessing}
-            >
-              <i class="icon-{method.icon}"></i>
-              <div class="payment-method-info">
-                <div class="payment-method-name">{method.name}</div>
-                <div class="payment-method-description">{method.description}</div>
-              </div>
-            </button>
-          {/each}
-        </div>
-        
-        {#if availablePaymentMethods.length === 0}
-          <div class="no-payment-methods">
-            <p>Carregando métodos de pagamento...</p>
-          </div>
-        {/if}
+      <PaymentMethodSelection 
+        availablePaymentMethods={availablePaymentMethods}
+        displayPaymentMethods={getDisplayPaymentMethods(availablePaymentMethods)}
+        selectedPayment={selectedPayment}
+        isProcessing={isProcessing}
+        onSelectPayment={selectPaymentMethod}
+        onSimulateProcessingPayment={simulateProcessingPayment}
+        onSimulatePixProcessing={simulatePixProcessing}
+        onSimulateQRCodeScreen={simulateQRCodeScreen}
+        onSimulateTimeoutScreen={simulateTimeoutScreen}
+        onSimulateSuccessPayment={simulateSuccessPayment}
+        onSimulateRefusedPayment={simulateRefusedPayment}
+      />
 
-        <!-- Debug buttons for testing payment states -->
-        <div class="debug-section">
-          <h3 class="debug-title">🧪 Debug - Testar Estados</h3>
-          <div class="debug-buttons">
-            <button class="debug-button processing" onclick={simulateProcessingPayment}>
-              ⏳ Processando (Cartão)
-            </button>
-            <button class="debug-button pix-processing" onclick={simulatePixProcessing}>
-              🔄 Preparando PIX
-            </button>
-            <button class="debug-button qr-code" onclick={simulateQRCodeScreen}>
-              📊 Escaneie QR Code
-            </button>
-            <button class="debug-button timeout" onclick={simulateTimeoutScreen}>
-              ⏰ Timeout PIX
-            </button>
-            <button class="debug-button success" onclick={simulateSuccessPayment}>
-              ✅ Simular Aprovado
-            </button>
-            <button class="debug-button refused" onclick={simulateRefusedPayment}>
-              ❌ Simular Recusado
-            </button>
-            <button class="debug-button end" onclick={() => goto('/end')}>
-              🏁 Ver Tela Final
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <h2 class="section-title">Resumo do Pedido</h2>
-        <div class="summary-items">
-          {#each cart.items as item}
-            <div class="summary-item">
-              <div class="item-info">
-                <span class="item-quantity">{item.quantity}x</span>
-                <span>{item.name}</span>
-              </div>
-              <span class="item-price">{formatPrice(item.price * item.quantity)}</span>
-            </div>
-          {/each}
-        </div>
-
-        <div class="summary-totals">
-          <div class="summary-row">
-            <span>Subtotal</span>
-            <span>{formatPrice(cart.subtotal)}</span>
-          </div>
-          {#if cart.fees && cart.fees > 0}
-            <div class="summary-row">
-              <span>Taxa de serviço</span>
-              <span>{formatPrice(cart.fees)}</span>
-            </div>
-          {/if}
-          {#if cart.discount && cart.discount > 0}
-            <div class="summary-row">
-              <span>Desconto</span>
-              <span>- {formatPrice(cart.discount)}</span>
-            </div>
-          {/if}
-          <div class="summary-row total">
-            <span>Total</span>
-            <span>{formatPrice(cart.total)}</span>
-          </div>
-        </div>
-      </section>
+      <CheckoutSummary cart={cart} />
     {:else if paymentState === 'processing'}
-      <section class="section payment-status active processing-screen">
-        <div class="processing-header">
-          {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
-            <div class="status-message">Preparando PIX</div>
-            <div class="status-description">Gerando QR Code para pagamento instantâneo</div>
-          {:else}
-            <div class="status-message">Processando pagamento</div>
-          {/if}
-        </div>
-
-        <div class="payment-details-card">
-          <div class="amount-display-processing">
-            {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
-              <div class="amount-label">Valor do PIX</div>
-            {:else}
-              <div class="amount-label">Valor sendo processado</div>
-            {/if}
-            <div class="amount-value">{formatPrice(cart.total)}</div>
-          </div>
-          
-          {#if selectedPayment}
-            <div class="payment-method-display">
-              <div class="method-label">Método de pagamento</div>
-              <div class="method-value">
-                {#each getDisplayPaymentMethods() as method}
-                  {#if method.id === selectedPayment}
-                    <i class="icon-{method.icon}"></i>
-                    {method.name}
-                  {/if}
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
-
-        <div class="processing-steps">
-          {#if selectedPayment && selectedPayment.includes('MERCADOPAGO') && !selectedPayment.includes('PINPAD')}
-            <h3 class="steps-title">Preparando PIX</h3>
-            <div class="step-list">
-              <div class="step-item active">
-                <div class="step-icon">
-                  <i class="icon-check"></i>
-                </div>
-                <div class="step-text">Validando dados</div>
-              </div>
-              <div class="step-item active">
-                <div class="step-icon processing">
-                  <div class="processing-dot small"></div>
-                  <div class="processing-dot small"></div>
-                  <div class="processing-dot small"></div>
-                </div>
-                <div class="step-text">Gerando QR Code</div>
-              </div>
-              <div class="step-item pending">
-                <div class="step-icon">
-                  <i class="icon-qr-code"></i>
-                </div>
-                <div class="step-text">Exibindo PIX</div>
-              </div>
-            </div>
-          {:else}
-            <h3 class="steps-title">Etapas do processamento</h3>
-            <div class="step-list">
-              <div class="step-item active">
-                <div class="step-icon">
-                  <i class="icon-check"></i>
-                </div>
-                <div class="step-text">Validando dados</div>
-              </div>
-              <div class="step-item active">
-                <div class="step-icon processing">
-                  <div class="processing-dot small"></div>
-                  <div class="processing-dot small"></div>
-                  <div class="processing-dot small"></div>
-                </div>
-                <div class="step-text">Processando pagamento</div>
-              </div>
-              <div class="step-item pending">
-                <div class="step-icon">
-                  <i class="icon-package"></i>
-                </div>
-                <div class="step-text">Liberando produtos</div>
-              </div>
-            </div>
-          {/if}
-        </div>
-
-        <div class="processing-animation">
-          <div class="processing-dot"></div>
-          <div class="processing-dot"></div>
-          <div class="processing-dot"></div>
-        </div>
-
-        <div class="processing-footer">
-          <button class="cart-style-cancel-button" onclick={cancelPayment}>
-            Cancelar
-          </button>
-        </div>
-      </section>
+      <PaymentProcessing 
+        cart={cart}
+        selectedPayment={selectedPayment}
+        displayPaymentMethods={getDisplayPaymentMethods(availablePaymentMethods)}
+        onCancel={cancelPayment}
+      />
     {:else if paymentState === 'show_qrcode'}
-      <section class="section payment-status active qr-code-screen">
-        <div class="qr-header">
-          <div class="status-message">Escaneie o QR Code</div>
-          <div class="status-description">Use seu celular para escanear o código PIX</div>
-        </div>
-
-        <div class="qr-main-container">
-          <div class="qr-code-display">
-            {#if paymentResult?.qrcode_source}
-              <img 
-                src="http://localhost:8090{paymentResult.qrcode_source}" 
-                alt="QR Code PIX" 
-                class="qr-code-image"
-              />
-            {:else}
-              <div class="qr-code-placeholder">
-                <div class="loader-spinner qr-spinner"></div>
-                <div class="loading-text">Carregando QR Code...</div>
-              </div>
-            {/if}
-          </div>
-          
-          <div class="payment-amount-qr">
-            <div class="amount-label">Valor do PIX</div>
-            <div class="amount-value">{formatPrice(cart.total)}</div>
-          </div>
-        </div>
-
-        <div class="qr-instructions">
-          <button class="instructions-button" onclick={() => showInstructionsPopup = true}>
-            Como pagar
-          </button>
-        </div>
-
-        <div class="qr-footer">
-          <div class="countdown-container">
-            <div class="countdown-circle">
-              <svg class="countdown-svg" width="60" height="60">
-                <circle 
-                  cx="30" 
-                  cy="30" 
-                  r="25" 
-                  stroke="var(--border)" 
-                  stroke-width="4" 
-                  fill="none"
-                />
-                <circle 
-                  cx="30" 
-                  cy="30" 
-                  r="25" 
-                  stroke="var(--primary)" 
-                  stroke-width="4" 
-                  fill="none"
-                  class="countdown-progress"
-                  stroke-dasharray="157"
-                  stroke-dashoffset={157 - (countdownTimer / 60) * 157}
-                />
-              </svg>
-              <div class="countdown-text">{countdownTimer}s</div>
-            </div>
-          </div>
-          <p class="qr-status">
-            <i class="icon-info"></i>
-            Complete o pagamento antes que o tempo expire
-          </p>
-          <button class="cart-style-cancel-button" onclick={cancelPayment}>
-            Cancelar
-          </button>
-        </div>
-      </section>
+      <PixQrCodePayment 
+        paymentResult={paymentResult}
+        cart={cart}
+        countdownTimer={countdownTimer}
+        onShowInstructions={() => showInstructionsPopup = true}
+        onCancel={cancelPayment}
+      />
     {:else if paymentState === 'payment_timeout'}
-      <section class="section payment-status active timeout-screen">
-        <div class="timeout-content">
-          <div class="timeout-icon">
-            <i class="icon-clock status-icon error"></i>
-          </div>
-          <div class="status-message error">Tempo esgotado</div>
-          <div class="status-description">
-            Desculpe, houve uma falha no processamento do seu pagamento.
-            O tempo limite foi excedido.
-          </div>
-        </div>
-
-        <div class="timeout-actions">
-          <button class="cart-style-checkout-button" onclick={() => location.reload()}>
-            Tentar novamente
-          </button>
-          <button class="cart-style-cancel-button" onclick={() => goto('/')}>
-            Cancelar
-          </button>
-        </div>
-      </section>
+      <PaymentTimeout 
+        onClose={() => goto('/')}
+        onCancel={() => goto('/')}
+      />
     {:else if paymentState === 'insert_tap_card'}
-      <section class="section payment-status active card-payment-screen">
-        <div class="instructions-header">
-          <h2 class="instructions-title">Siga as instruções do Pinpad</h2>
-          <p class="instructions-subtitle">Por favor, siga os passos abaixo para completar seu pagamento</p>
-        </div>
-
-        <div class="amount-display">
-          <div class="amount-label">Valor a pagar</div>
-          <div class="amount-value">{formatPrice(cart.total)}</div>
-        </div>
-
-        <div class="steps-container">
-          <div class="step active">
-            <div class="step-icon">
-              <i class="icon-power"></i>
-            </div>
-            <div class="step-content">
-              <h3 class="step-title">Pressione os Botões</h3>
-              <p class="step-description">
-                Pressione o botão vermelho e depois o verde para iniciar a operação
-              </p>
-              <div class="button-indicators">
-                <span class="button-indicator button-red">Vermelho</span>
-                <span class="button-indicator button-green">Verde</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-icon">
-              <i class="icon-credit-card"></i>
-            </div>
-            <div class="step-content">
-              <h3 class="step-title">Aproxime ou Insira seu Cartão</h3>
-              <p class="step-description">
-                Aproxime seu cartão do leitor ou insira o chip para iniciar o pagamento
-              </p>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-icon">
-              <i class="icon-check-circle"></i>
-            </div>
-            <div class="step-content">
-              <h3 class="step-title">Aguarde a Confirmação</h3>
-              <p class="step-description">
-                Não remova o cartão até que a transação seja concluída
-              </p>
-            </div>
-          </div>
-
-          <div class="step">
-            <div class="step-icon">
-              <i class="icon-arrow-left"></i>
-            </div>
-            <div class="step-content">
-              <h3 class="step-title">Retire seu Cartão</h3>
-              <p class="step-description">
-                Retire seu cartão do Pinpad quando solicitado
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <button class="cancel-payment-button card-cancel-button" onclick={cancelPayment}>
-          <i class="icon-x"></i>
-          Cancelar Pagamento
-        </button>
-      </section>
+      <CardPayment 
+        cart={cart}
+        countdownTimer={cardPaymentTimer}
+        onCancel={cancelPayment}
+      />
     {:else if paymentState === 'success'}
-      <section class="section payment-status active success-state">
-        <div class="status-card">
-          <div class="status-icon-container">
-            <div class="success-checkmark">
-              <div class="checkmark-circle-success"></div>
-              <div class="checkmark-icon-success">✓</div>
-            </div>
-          </div>
-          <div class="status-badge success">
-            Pagamento Aprovado
-          </div>
-          <h2 class="status-title">Preparando seus produtos</h2>
-          <p class="status-message">
-            Aguarde enquanto seus produtos são liberados
-          </p>
-
-          {#if deliverySteps.length > 0}
-            <ProgressSteps steps={deliverySteps} />
-          {/if}
-        </div>
-
-        {#if paymentResult?.receipt}
-          <div class="transaction-details">
-            <h3 class="details-title">Detalhes do Pedido</h3>
-            <div class="details-grid">
-              <div class="detail-group">
-                <span class="detail-label">Número da Transação</span>
-                <span class="detail-value">{paymentResult.receipt.transactionId}</span>
-              </div>
-              <div class="detail-group">
-                <span class="detail-label">Data</span>
-                <span class="detail-value">{new Date(paymentResult.receipt.timestamp).toLocaleString('pt-BR')}</span>
-              </div>
-              <div class="detail-group">
-                <span class="detail-label">Método de Pagamento</span>
-                <span class="detail-value">{paymentResult.receipt.paymentMethod}</span>
-              </div>
-              <div class="detail-group">
-                <span class="detail-label">Valor Total</span>
-                <span class="detail-value">{formatPrice(paymentResult.receipt.total)}</span>
-              </div>
-            </div>
-          </div>
-        {/if}
-      </section>
+      <PaymentSuccess 
+        paymentResult={paymentResult}
+        deliverySteps={deliverySteps}
+      />
     {:else if paymentState === 'failed' || paymentState === 'retry'}
-      <section class="section payment-status active error-state">
-        <div class="error-content-center">
-          <div class="error-animation">
-            <div class="error-circle">
-              <span class="status-icon error">!</span>
-            </div>
-          </div>
-          <div class="status-message">Pagamento Recusado</div>
-        </div>
-        
-        {#if paymentState === 'retry' && retryCount < maxRetries}
-          <div class="retry-options">
-            <button class="cart-style-checkout-button" onclick={retryPayment}>
-              Tentar Novamente
-            </button>
-            <button class="cart-style-cancel-button" onclick={() => goto('/')}>
-              Cancelar
-            </button>
-          </div>
-        {:else}
-          <div class="final-options">
-            <button class="return-button" onclick={() => goto('/')}>
-              Voltar ao Início
-            </button>
-            <p class="retry-exceeded">Limite de tentativas excedido. Tente novamente mais tarde.</p>
-          </div>
-        {/if}
-      </section>
+      <PaymentFailure 
+        paymentState={paymentState}
+        retryCount={retryCount}
+        maxRetries={maxRetries}
+        onRetry={retryPayment}
+        onCancel={() => goto('/')}
+        onReturn={() => goto('/')}
+      />
     {/if}
   </main>
 </div>
 
 <!-- Instructions Popup -->
-{#if showInstructionsPopup}
-  <div class="popup-overlay" onclick={() => showInstructionsPopup = false}>
-    <div class="popup-content" onclick={(e) => e.stopPropagation()}>
-      <div class="popup-header">
-        <h3 class="popup-title">Como pagar com PIX</h3>
-        <button class="popup-close" onclick={() => showInstructionsPopup = false}>
-          <i class="icon-x"></i>
-        </button>
-      </div>
-      <div class="popup-body">
-        <div class="instruction-grid">
-          <div class="instruction-step">
-            <div class="step-number">1</div>
-            <div class="step-text">Abra o aplicativo do seu banco</div>
-          </div>
-          <div class="instruction-step">
-            <div class="step-number">2</div>
-            <div class="step-text">Escolha a opção "Pagar com PIX"</div>
-          </div>
-          <div class="instruction-step">
-            <div class="step-number">3</div>
-            <div class="step-text">Escaneie o QR Code exibido na tela</div>
-          </div>
-          <div class="instruction-step">
-            <div class="step-number">4</div>
-            <div class="step-text">Confirme as informações e valor</div>
-          </div>
-          <div class="instruction-step">
-            <div class="step-number">5</div>
-            <div class="step-text">Aguarde a confirmação do pagamento</div>
-          </div>
-          <div class="instruction-step">
-            <div class="step-number">6</div>
-            <div class="step-text">Aguarde a liberação dos itens</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
+<PixInstructionsPopup 
+  show={showInstructionsPopup}
+  onClose={() => showInstructionsPopup = false}
+/>
+
+<!-- Session Timeout Components -->
+<TimeoutProgressBar show={showProgressBar} progressWidth={progressWidth} />
+<TimeoutDialog show={showTimeoutDialog} onContinue={continueSession} />
 
 <style>
   .checkout-container {
@@ -915,65 +624,6 @@
     font-family: var(--font-sans);
   }
 
-  .header {
-    background: var(--primary);
-    color: var(--primary-foreground);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-
-  .header-top {
-    background: rgba(0, 0, 0, 0.1);
-    padding: 0.5rem 2rem;
-    font-size: 0.875rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-
-  .header-main {
-    padding: 1rem 2rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .back-button {
-    background: transparent;
-    border: none;
-    color: var(--primary-foreground);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem;
-    cursor: pointer;
-    font-weight: 500;
-    border-radius: var(--radius);
-    transition: all 0.2s ease;
-    min-height: 44px;
-    font-size: 1rem;
-  }
-
-  .back-text {
-    font-size: 0.875rem;
-  }
-
-  .back-button:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
-    transform: translateX(-2px);
-  }
-
-  .back-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .page-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-  }
 
   .main-content {
     flex: 1;
@@ -993,6 +643,8 @@
     height: calc(100vh - 120px);
     max-height: calc(100vh - 120px);
     overflow-y: auto;
+    max-width: 800px; /* Maintain consistent width */
+    margin: 0 auto; /* Keep centered */
   }
 
   .section {
@@ -1070,56 +722,6 @@
     opacity: 0.8;
   }
 
-  .summary-items {
-    margin-bottom: 1.5rem;
-  }
-
-  .summary-item {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .item-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .item-quantity {
-    background: var(--muted);
-    color: var(--muted-foreground);
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-  }
-
-  .item-price {
-    font-weight: 500;
-  }
-
-  .summary-totals {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .summary-row {
-    display: flex;
-    justify-content: space-between;
-    color: var(--muted-foreground);
-  }
-
-  .summary-row.total {
-    font-weight: 700;
-    font-size: 1.25rem;
-    margin-top: 0.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-    color: var(--foreground);
-  }
 
   .payment-status {
     text-align: center;
@@ -1503,6 +1105,9 @@
     text-align: center;
     border: 1px solid var(--border, #E2E8F0);
     margin-bottom: 2rem;
+    width: 100%;
+    max-width: 800px; /* Consistent with main-content */
+    margin: 0 auto 2rem auto; /* Centered with bottom margin */
   }
 
   .status-icon-container {
@@ -2500,6 +2105,7 @@
     background: rgba(255, 193, 7, 0.1);
     border: 2px dashed #ffc107;
     border-radius: var(--radius, 0.5rem);
+    display: none; /* Hide debug section from visualization */
   }
 
   .debug-title {
@@ -2854,4 +2460,5 @@
     font-size: 1rem;
     color: var(--foreground);
   }
+
 </style>

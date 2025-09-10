@@ -37,15 +37,81 @@ export default defineConfig({
 			},
 			workbox: {
 				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+				maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
 				runtimeCaching: [
+					// API Cache - Network First for fresh data
 					{
-						urlPattern: /^https:\/\/localhost:8090\/interface\//,
+						urlPattern: /^https?:\/\/localhost:8090\/interface\/(products|cart|checkout)/,
 						handler: 'NetworkFirst',
 						options: {
-							cacheName: 'api-cache',
+							cacheName: 'api-data-cache',
 							networkTimeoutSeconds: 3,
 							cacheableResponse: {
 								statuses: [0, 200]
+							},
+							expiration: {
+								maxEntries: 50,
+								maxAgeSeconds: 5 * 60 // 5 minutes
+							}
+						}
+					},
+					// Static API resources - Cache First for performance  
+					{
+						urlPattern: /^https?:\/\/localhost:8090\/interface\/(settings|media)/,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'api-static-cache',
+							cacheableResponse: {
+								statuses: [0, 200]
+							},
+							expiration: {
+								maxEntries: 100,
+								maxAgeSeconds: 30 * 60 // 30 minutes
+							}
+						}
+					},
+					// Images - Cache First with long expiration
+					{
+						urlPattern: /\.(?:png|jpg|jpeg|gif|webp|svg)$/,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'images-cache',
+							cacheableResponse: {
+								statuses: [0, 200]
+							},
+							expiration: {
+								maxEntries: 200,
+								maxAgeSeconds: 24 * 60 * 60 // 24 hours
+							}
+						}
+					},
+					// Fonts - Cache First with very long expiration
+					{
+						urlPattern: /\.(?:woff|woff2|ttf|eot)$/,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'fonts-cache',
+							cacheableResponse: {
+								statuses: [0, 200]
+							},
+							expiration: {
+								maxEntries: 30,
+								maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
+							}
+						}
+					},
+					// External CDN resources
+					{
+						urlPattern: /^https:\/\/(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.jsdelivr\.net|unpkg\.com)/,
+						handler: 'StaleWhileRevalidate',
+						options: {
+							cacheName: 'external-resources-cache',
+							cacheableResponse: {
+								statuses: [0, 200]
+							},
+							expiration: {
+								maxEntries: 50,
+								maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
 							}
 						}
 					}
@@ -56,6 +122,6 @@ export default defineConfig({
 	test: {
 		environment: 'jsdom',
 		globals: true,
-		setupFiles: ['src/setupTests.ts']
+		setupFiles: ['./src/test/setup.ts']
 	}
 });

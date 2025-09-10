@@ -9,20 +9,14 @@
 
   onMount(async () => {
     try {
+      console.log('VideoScreen: Loading visual settings...');
       settings = await visualSettingsService.loadSettings();
+      console.log('VideoScreen: Visual settings loaded successfully');
     } catch (error) {
-      console.error('Failed to load visual settings:', error);
-      errorDialogService.showError({
-        title: 'Erro de Configuração',
-        message: 'Não foi possível carregar as configurações visuais.',
-        actions: [
-          {
-            label: 'Tentar Novamente',
-            action: () => window.location.reload(),
-            variant: 'primary'
-          }
-        ]
-      });
+      console.error('VideoScreen: Failed to load visual settings (this should not happen anymore):', error);
+      // Visual settings service should handle errors gracefully now
+      // Use fallback settings if needed
+      settings = visualSettingsService.getDefaultSettings();
     } finally {
       isLoading = false;
     }

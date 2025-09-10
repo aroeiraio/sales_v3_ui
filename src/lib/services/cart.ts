@@ -1,5 +1,6 @@
 import { errorDialogService } from './errorDialog';
 import { sessionService } from './session';
+import { toastService } from './toast';
 import { cart, cartActions } from '../stores/cart';
 
 export interface CartItem {
@@ -149,8 +150,8 @@ class CartService {
                     message: 'Não foi possível criar uma sessão de compra após múltiplas tentativas.',
                     actions: [
                       {
-                        label: 'Tentar Novamente',
-                        action: () => this.addItem(itemId, type, 0),
+                        label: 'Fechar',
+                        action: () => {},
                         variant: 'primary'
                       }
                     ]
@@ -171,8 +172,8 @@ class CartService {
                     message: 'Não foi possível criar uma sessão de compra. Tente novamente.',
                     actions: [
                       {
-                        label: 'Tentar Novamente',
-                        action: () => this.addItem(itemId, type, 0),
+                        label: 'Fechar',
+                        action: () => {},
                         variant: 'primary'
                       }
                     ]
@@ -186,8 +187,8 @@ class CartService {
                   message: errorData.message,
                   actions: [
                     {
-                      label: 'Tentar Novamente',
-                      action: () => this.addItem(itemId, type, 0),
+                      label: 'Fechar',
+                      action: () => {},
                       variant: 'primary'
                     }
                   ]
@@ -199,9 +200,8 @@ class CartService {
             console.log('🛒 Cart created with new item (404 without error data)');
             // Refresh cart data to get the updated cart
             await this.getCart();
-            // Show success toast for cart creation
-            console.log('🍞 About to show toast for new cart creation');
-            this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
+            // Cart creation successful - no toast on early return
+            console.log('✅ Cart created successfully');
             return;
           }
         }
@@ -216,9 +216,9 @@ class CartService {
         console.log('🔍 Successfully parsed response, proceeding to check for errors...');
       } catch (jsonError) {
         console.log('Failed to parse success response as JSON:', jsonError);
-        // Refresh cart and show default success message
+        // Refresh cart - no toast on parsing error
         await this.getCart();
-        this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
+        console.log('✅ Cart updated (response parsing failed)');
         return;
       }
       
@@ -268,8 +268,8 @@ class CartService {
                 message: 'Não foi possível criar uma sessão de compra após múltiplas tentativas.',
                 actions: [
                   {
-                    label: 'Tentar Novamente',
-                    action: () => this.addItem(itemId, type, 0),
+                    label: 'Fechar',
+                    action: () => {},
                     variant: 'primary'
                   }
                 ]
@@ -290,8 +290,8 @@ class CartService {
                 message: 'Não foi possível criar uma sessão de compra. Tente novamente.',
                 actions: [
                   {
-                    label: 'Tentar Novamente',
-                    action: () => this.addItem(itemId, type, 0),
+                    label: 'Fechar',
+                    action: () => {},
                     variant: 'primary'
                   }
                 ]
@@ -326,26 +326,25 @@ class CartService {
         this.cart = this.transformApiResponseToCart(data);
       } else {
         // Fallback: refresh cart data
-        console.log('🛒 Fallback: refreshing cart data and returning early');
+        console.log('🛒 Fallback: refreshing cart data');
         await this.getCart();
-        this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
-        return;
       }
       console.log('Cart updated after adding item:', this.cart);
       this.notifySubscribers();
 
-      // Show success toast for 3 seconds
-      console.log('🍞 About to show success toast. Data:', data);
+      // Show success toast for 3 seconds (always show on successful HTTP 200)
+      console.log('🍞 HTTP 200 success - showing toast. Data:', data);
+      
       if (data.message && data.msg_code === 'CART_ADDED_ITEM') {
         console.log('🍞 Showing toast with API message (CART_ADDED_ITEM)');
-        this.showToast(data.message, 3000);
-      } else if (data.message) {
-        console.log('🍞 Showing toast with API message');
-        this.showToast(data.message, 3000);
+        toastService.showSuccess(data.message, 3000);
+      } else if (data.message && !data.error) {
+        console.log('🍞 Showing toast with API message (no error)');
+        toastService.showSuccess(data.message, 3000);
       } else {
-        // Fallback success message
-        console.log('🍞 Showing fallback success message');
-        this.showToast('Item adicionado ao carrinho com sucesso!', 3000);
+        // Always show success toast for HTTP 200, regardless of data content
+        console.log('🍞 Showing default success toast for HTTP 200');
+        toastService.showSuccess('Item adicionado ao carrinho com sucesso!', 3000);
       }
 
     } catch (error) {
@@ -353,7 +352,7 @@ class CartService {
       
       if (error.message.includes('network') || error.message.includes('fetch')) {
         console.log('Showing network error dialog');
-        errorDialogService.showNetworkError(() => this.addItem(itemId, type, 0));
+        errorDialogService.showNetworkError(() => {});
       } else {
         console.log('Showing general error dialog');
         // Show modal with error message as per API specification
@@ -362,8 +361,8 @@ class CartService {
           message: error.message || 'Não foi possível adicionar o item ao carrinho. Tente novamente.',
           actions: [
             {
-              label: 'Tentar Novamente',
-              action: () => this.addItem(itemId, type, 0),
+              label: 'Fechar',
+              action: () => {},
               variant: 'primary'
             },
             {
@@ -415,8 +414,8 @@ class CartService {
           message: 'Não foi possível remover o item do carrinho. Tente novamente.',
           actions: [
             {
-              label: 'Tentar Novamente',
-              action: () => this.removeItem(itemId),
+              label: 'Fechar',
+              action: () => {},
               variant: 'primary'
             }
           ]
@@ -466,8 +465,8 @@ class CartService {
           message: 'Não foi possível atualizar a quantidade do item. Tente novamente.',
           actions: [
             {
-              label: 'Tentar Novamente',
-              action: () => this.updateQuantity(itemId, newQuantity),
+              label: 'Fechar',
+              action: () => {},
               variant: 'primary'
             }
           ]
@@ -507,8 +506,8 @@ class CartService {
           message: 'Não foi possível limpar o carrinho. Tente novamente.',
           actions: [
             {
-              label: 'Tentar Novamente',
-              action: () => this.clearCart(),
+              label: 'Fechar',
+              action: () => {},
               variant: 'primary'
             }
           ]
@@ -581,57 +580,7 @@ class CartService {
     };
   }
 
-  private showToast(message: string, duration: number = 3000): void {
-    console.log('🍞 showToast called with message:', message, 'duration:', duration, 'ms');
-    
-    // Create toast element
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.textContent = message;
-    toast.style.cssText = `
-      position: fixed;
-      top: 80px;
-      right: 20px;
-      background: #10B981;
-      color: white;
-      padding: 1rem 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      z-index: 10001;
-      font-weight: 600;
-      font-size: 16px;
-      max-width: 320px;
-      word-wrap: break-word;
-      opacity: 0;
-      transform: translateX(100%);
-      transition: all 0.3s ease-out;
-      font-family: system-ui, -apple-system, sans-serif;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-    `;
-
-    document.body.appendChild(toast);
-
-    // Trigger animation
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateX(0)';
-      });
-    });
-
-    // Remove toast after specified duration
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-          if (toast.parentNode) {
-            toast.parentNode.removeChild(toast);
-          }
-        }, 300);
-      }
-    }, duration);
-  }
+  
 
   // Validation methods
   validateCart(): { isValid: boolean; errors: string[] } {
@@ -678,8 +627,8 @@ class CartService {
           message: 'Não foi possível validar o carrinho. Tente novamente.',
           actions: [
             {
-              label: 'Tentar Novamente',
-              action: () => this.validateForCheckout(),
+              label: 'Fechar',
+              action: () => {},
               variant: 'primary'
             }
           ]

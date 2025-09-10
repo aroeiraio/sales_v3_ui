@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { ArrowLeft, Minus, Plus, Trash2, ArrowRight, ShoppingCart } from 'lucide-svelte';
+	import { ArrowLeft, Minus, Plus, Trash2, ArrowRight, ShoppingCart, HelpCircle } from 'lucide-svelte';
 	import { visualSettingsService } from '$lib/services/visualSettings';
 	import { cartService, type Cart, type CartItem } from '$lib/services/cart';
 	import { errorDialogService } from '$lib/services/errorDialog';
@@ -16,6 +16,16 @@
 		discount: 0
 	});
 	let unsubscribeCart: (() => void) | null = null;
+	
+	// Session timeout handling
+	let sessionTimeoutId: NodeJS.Timeout | null = null;
+	let progressIntervalId: NodeJS.Timeout | null = null;
+	let sessionStartTime = 0;
+	let showTimeoutDialog = $state(false);
+	let showProgressBar = $state(false);
+	let progressWidth = $state(100);
+	const SESSION_TIMEOUT = 60000; // 60 seconds
+	const PROGRESS_THRESHOLD = 11000; // Show dialog when less than 11 seconds remain
 
 	onMount(async () => {
 		try {
@@ -46,10 +56,19 @@
 			console.error('Failed to initialize cart:', error);
 		}
 
+		// Start session timeout
+		startSessionTimeout();
+
 		return () => {
 			clearInterval(timeInterval);
 			if (unsubscribeCart) {
 				unsubscribeCart();
+			}
+			if (sessionTimeoutId) {
+				clearTimeout(sessionTimeoutId);
+			}
+			if (progressIntervalId) {
+				clearInterval(progressIntervalId);
 			}
 		};
 	});
@@ -57,6 +76,12 @@
 	onDestroy(() => {
 		if (unsubscribeCart) {
 			unsubscribeCart();
+		}
+		if (sessionTimeoutId) {
+			clearTimeout(sessionTimeoutId);
+		}
+		if (progressIntervalId) {
+			clearInterval(progressIntervalId);
 		}
 	});
 
@@ -105,6 +130,61 @@
 	// Reset timeout on any user interaction
 	function handleUserInteraction() {
 		sessionService.resetTimeout();
+		resetSessionTimeout();
+	}
+
+	function startSessionTimeout() {
+		if (sessionTimeoutId) {
+			clearTimeout(sessionTimeoutId);
+		}
+		if (progressIntervalId) {
+			clearInterval(progressIntervalId);
+		}
+		
+		sessionStartTime = Date.now();
+		showTimeoutDialog = false;
+		showProgressBar = false;
+		progressWidth = 100;
+		
+		sessionTimeoutId = setTimeout(() => {
+			console.log('Session timeout reached, ending session');
+			sessionService.endSession();
+			window.location.href = '/';
+		}, SESSION_TIMEOUT);
+		
+		// Start progress monitoring
+		startProgressMonitoring();
+	}
+
+	function startProgressMonitoring() {
+		progressIntervalId = setInterval(() => {
+			const elapsed = Date.now() - sessionStartTime;
+			const remaining = SESSION_TIMEOUT - elapsed;
+			
+			if (remaining <= PROGRESS_THRESHOLD) {
+				if (!showProgressBar) {
+					showProgressBar = true;
+				}
+				if (!showTimeoutDialog) {
+					showTimeoutDialog = true;
+				}
+				// Calculate progress width (100% to 0% over the last 11 seconds)
+				progressWidth = Math.max(0, (remaining / PROGRESS_THRESHOLD) * 100);
+			} else {
+				showProgressBar = false;
+				showTimeoutDialog = false;
+				progressWidth = 100;
+			}
+		}, 100); // Update every 100ms for smooth animation
+	}
+
+	function resetSessionTimeout() {
+		startSessionTimeout();
+	}
+
+	function continueSession() {
+		showTimeoutDialog = false;
+		resetSessionTimeout();
 	}
 
 	function showToast(message: string, duration: number = 3000): void {
@@ -166,16 +246,12 @@
 
 <div class="full-screen-container">
 	<header class="header">
-		<div class="header-top">
-			<div></div>
-			<div class="time">{currentTime}</div>
-		</div>
 		<div class="header-main">
 			<button class="back-button" onclick={goBack}>
-				<ArrowLeft size={20} />
-				Voltar
+				<ArrowLeft size={24} />
 			</button>
 			<h1 class="page-title">Carrinho</h1>
+			<div class="time">{currentTime}</div>
 		</div>
 	</header>
 
@@ -271,6 +347,29 @@
 	</main>
 </div>
 
+<!-- Session Timeout Progress Bar -->
+{#if showProgressBar}
+	<div class="timeout-progress-bar">
+		<div class="progress-fill" style:width="{progressWidth}%"></div>
+	</div>
+{/if}
+
+<!-- Timeout Dialog -->
+{#if showTimeoutDialog}
+	<div class="timeout-dialog-backdrop">
+		<div class="timeout-dialog">
+			<div class="dialog-icon">
+				<HelpCircle size={48} />
+			</div>
+			<h3 class="dialog-title">Ei! Tem alguém aí?</h3>
+			<p class="dialog-message">Clique para continuar</p>
+			<button class="continue-button" onclick={continueSession}>
+				OK
+			</button>
+		</div>
+	</div>
+{/if}
+
 <style>
 	.full-screen-container {
 		height: 100vh;
@@ -290,47 +389,52 @@
 		flex-shrink: 0;
 	}
 
-	.header-top {
-		background: rgba(0, 0, 0, 0.1);
-		padding: 0.5rem 2rem;
-		font-size: 0.875rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-
 	.header-main {
-		padding: 1rem 2rem;
+		padding: 1.5rem 2rem;
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 1rem;
 	}
 
 	.back-button {
-		background: transparent;
-		border: none;
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
 		color: var(--primary-foreground);
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem;
+		justify-content: center;
 		cursor: pointer;
-		font-weight: 500;
-		border-radius: var(--radius);
-		transition: all 0.2s ease;
-		min-height: 44px;
-		font-size: 1rem;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+		width: 44px;
+		height: 44px;
+		border-radius: 0.5rem;
+		backdrop-filter: blur(8px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	}
 
 	.back-button:hover {
-		background: rgba(255, 255, 255, 0.1);
-		transform: translateX(-2px);
+		background: rgba(255, 255, 255, 0.2);
+		border-color: rgba(255, 255, 255, 0.3);
+		transform: translateX(-3px) translateY(-1px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 
 	.page-title {
-		font-size: 1.25rem;
-		font-weight: 600;
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin: 0;
+		color: var(--primary-foreground);
+		text-align: center;
+		flex: 1;
+	}
+
+	.time {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.9);
+		width: 44px;
+		text-align: center;
 	}
 
 	.main-content {
@@ -662,10 +766,22 @@
 	}
 
 	@media (max-width: 768px) {
-		.header-top,
 		.header-main {
-			padding-left: 1rem;
-			padding-right: 1rem;
+			padding: 1rem;
+		}
+
+		.back-button {
+			width: 40px;
+			height: 40px;
+		}
+
+		.page-title {
+			font-size: 1.25rem;
+		}
+
+		.time {
+			font-size: 0.75rem;
+			width: 40px;
 		}
 
 		.main-content {
@@ -726,6 +842,113 @@
 
 		.section-title {
 			font-size: 1.25rem;
+		}
+	}
+
+	/* Timeout Dialog Styles */
+	.timeout-dialog-backdrop {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.7);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+		animation: fadeIn 0.3s ease-out;
+	}
+
+	.timeout-dialog {
+		background: white;
+		border-radius: var(--radius-lg);
+		padding: 2rem;
+		max-width: 400px;
+		width: 90%;
+		text-align: center;
+		box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+		animation: slideUp 0.3s ease-out;
+	}
+
+	.dialog-icon {
+		color: #f59e0b;
+		margin-bottom: 1rem;
+	}
+
+	.dialog-title {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--foreground);
+		margin: 0 0 1rem 0;
+	}
+
+	.dialog-message {
+		font-size: 1rem;
+		color: var(--muted-foreground);
+		margin: 0 0 2rem 0;
+	}
+
+	.continue-button {
+		background: var(--primary);
+		color: white;
+		border: none;
+		padding: 1rem 2rem;
+		border-radius: var(--radius);
+		font-weight: 600;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		min-width: 120px;
+	}
+
+	.continue-button:hover {
+		background: var(--primary-hover, #006b8a);
+		transform: translateY(-1px);
+	}
+
+	/* Session Timeout Progress Bar */
+	.timeout-progress-bar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 4px;
+		background: rgba(0, 0, 0, 0.1);
+		z-index: 9999;
+		overflow: hidden;
+	}
+
+	.progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #ff6b6b, #ff8e53, #ff6b6b);
+		background-size: 200% 100%;
+		animation: progressShimmer 1s ease-in-out infinite;
+		transition: width 0.1s linear;
+	}
+
+	@keyframes progressShimmer {
+		0% {
+			background-position: -200% 0;
+		}
+		100% {
+			background-position: 200% 0;
+		}
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes slideUp {
+		from { 
+			opacity: 0;
+			transform: translateY(20px) scale(0.95);
+		}
+		to { 
+			opacity: 1;
+			transform: translateY(0) scale(1);
 		}
 	}
 </style>

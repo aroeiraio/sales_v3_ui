@@ -46,7 +46,7 @@ export interface PaymentResponse {
 // PoS Payment API Types
 export interface PosPaymentRequest {
   broker: 'MERCADOPAGO_PINPAD' | 'MERCADOPAGO';
-  method: 'credit' | 'debit' | 'mercadopago';
+  method: 'credit' | 'debit' | 'mercadopago' | 'pix';
 }
 
 export interface PosPaymentStatus {
@@ -125,7 +125,7 @@ class PaymentService {
   private startWaitTimeout() {
     this.waitStartTime = Date.now();
     this.waitTimeoutId = setTimeout(async () => {
-      console.log('PIX payment timeout reached (15s), canceling payment');
+      console.log('PIX payment QR code generation timeout reached (30s), canceling payment');
       try {
         // Cancel the payment
         await fetch('http://localhost:8090/interface/payment', {
@@ -137,7 +137,7 @@ class PaymentService {
         console.error('Error canceling payment:', error);
         this.setState('payment_timeout');
       }
-    }, 15000); // 15 seconds
+    }, 30000); // 30 seconds - only for QR code generation timeout
   }
 
   private clearWaitTimeout() {
@@ -204,6 +204,12 @@ class PaymentService {
       // Map UI payment methods to PoS API format
       const posRequest: PosPaymentRequest = this.mapToPosRequest(paymentMethod);
       
+      console.log('Payment method mapping:', {
+        inputPaymentMethod: paymentMethod,
+        mappedRequest: posRequest,
+        broker: posRequest.broker,
+        method: posRequest.method
+      });
       console.log('Starting payment with:', posRequest);
       console.log('Session ID:', session?.sessionId || 'No session (checkout flow)');
       console.log('Cart total:', cart.total);
@@ -220,7 +226,13 @@ class PaymentService {
       console.log('Payment API response:', response.status, response.statusText);
 
       if (!response.ok) {
-        throw new Error(`Payment API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Payment API error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorBody: errorText
+        });
+        throw new Error(`Payment API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const paymentData = await response.json();
@@ -250,11 +262,11 @@ class PaymentService {
   private mapToPosRequest(paymentMethod: string): PosPaymentRequest {
     // Handle both old format (credit, debit, pix) and new format (BROKER-METHOD)
     if (paymentMethod.includes('-')) {
-      // New checkout API format: "MERCADOPAGO-mercadopago" or "MERCADOPAGO_PINPAD-credit"
+      // New checkout API format: "MERCADOPAGO-pix" or "MERCADOPAGO_PINPAD-credit"
       const [broker, method] = paymentMethod.split('-');
       
-      if (broker === 'MERCADOPAGO' && method === 'mercadopago') {
-        return { broker: 'MERCADOPAGO', method: 'mercadopago' };
+      if (broker === 'MERCADOPAGO' && method === 'pix') {
+        return { broker: 'MERCADOPAGO', method: 'pix' };
       } else if (broker === 'MERCADOPAGO_PINPAD' && method === 'credit') {
         return { broker: 'MERCADOPAGO_PINPAD', method: 'credit' };
       } else if (broker === 'MERCADOPAGO_PINPAD' && method === 'debit') {
@@ -270,7 +282,7 @@ class PaymentService {
         case 'debit':
           return { broker: 'MERCADOPAGO_PINPAD', method: 'debit' };
         case 'pix':
-          return { broker: 'MERCADOPAGO', method: 'mercadopago' };
+          return { broker: 'MERCADOPAGO', method: 'pix' };
         default:
           throw new Error(`Unsupported payment method: ${paymentMethod}`);
       }
@@ -307,7 +319,7 @@ class PaymentService {
     switch (status.action) {
       case 'WAIT':
         // For PIX, WAIT state is handled in processing - just continue waiting for SHOW_QRCODE
-        // Start 15-second timeout for PIX payments (if SHOW_QRCODE doesn't come)
+        // Start 30-second timeout for QR code generation (if SHOW_QRCODE doesn't come)
         this.startWaitTimeout();
         break;
       

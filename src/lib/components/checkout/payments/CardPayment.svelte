@@ -1,4 +1,6 @@
 <script>
+  import { CreditCard, Smartphone, CheckCircle, ArrowLeft } from 'lucide-svelte';
+
   /**
    * @type {any}
    */
@@ -44,23 +46,22 @@
   <div class="steps-container">
     <div class="step active">
       <div class="step-icon">
-        <i class="icon-power"></i>
+        <Smartphone size={24} />
       </div>
       <div class="step-content">
         <h3 class="step-title">Pressione os Botões</h3>
         <p class="step-description">
-          Pressione o botão vermelho e depois o verde para iniciar a operação
+          Pressione os botões conforme a imagem abaixo para iniciar a operação
         </p>
-        <div class="button-indicators">
-          <span class="button-indicator button-red">Vermelho</span>
-          <span class="button-indicator button-green">Verde</span>
+        <div class="button-image-container">
+          <img src="/point_buttons.png" alt="Botões do Pinpad" class="button-image" />
         </div>
       </div>
     </div>
 
     <div class="step">
       <div class="step-icon">
-        <i class="icon-credit-card"></i>
+        <CreditCard size={24} />
       </div>
       <div class="step-content">
         <h3 class="step-title">Aproxime ou Insira seu Cartão</h3>
@@ -72,7 +73,7 @@
 
     <div class="step">
       <div class="step-icon">
-        <i class="icon-check-circle"></i>
+        <CheckCircle size={24} />
       </div>
       <div class="step-content">
         <h3 class="step-title">Aguarde a Confirmação</h3>
@@ -84,7 +85,7 @@
 
     <div class="step">
       <div class="step-icon">
-        <i class="icon-arrow-left"></i>
+        <ArrowLeft size={24} />
       </div>
       <div class="step-content">
         <h3 class="step-title">Retire seu Cartão</h3>
@@ -123,12 +124,10 @@
       </div>
     </div>
     <p class="card-status">
-      <i class="icon-info"></i>
       Complete o pagamento antes que o tempo expire
     </p>
-    <button class="cancel-payment-button card-cancel-button" onclick={onCancel}>
-      <i class="icon-x"></i>
-      Cancelar Pagamento
+    <button class="cart-style-cancel-button" onclick={onCancel}>
+      Cancelar
     </button>
   </div>
 </section>
@@ -144,14 +143,17 @@
   .card-payment-screen {
     width: 100%;
     padding: 1.5rem;
-    height: fit-content;
+    height: calc(100vh - 160px);
     max-height: calc(100vh - 160px);
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .instructions-header {
     text-align: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
   }
 
   .instructions-title {
@@ -168,11 +170,12 @@
 
   .amount-display {
     text-align: center;
-    margin-bottom: 1.5rem;
-    padding: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
     background: var(--background);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
     border: 2px solid var(--border);
+    flex-shrink: 0;
   }
 
   .amount-label {
@@ -185,7 +188,7 @@
   }
 
   .amount-value {
-    font-size: 3rem;
+    font-size: 2rem;
     font-weight: 700;
     color: var(--foreground);
     line-height: 1.2;
@@ -194,18 +197,20 @@
   .steps-container {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
     max-width: 600px;
     margin: 0 auto;
     position: relative;
+    flex: 1;
+    min-height: 0;
   }
 
   .steps-container::before {
     content: '';
     position: absolute;
-    left: 24px;
-    top: 48px;
-    bottom: 48px;
+    left: 20px;
+    top: 40px;
+    bottom: 40px;
     width: 2px;
     background: var(--border);
     z-index: 0;
@@ -213,12 +218,13 @@
 
   .step {
     display: flex;
-    gap: 1.5rem;
-    padding: 1rem;
+    gap: 1rem;
+    padding: 0.75rem;
     background: var(--background);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
     transition: all 0.3s ease;
     position: relative;
+    min-height: auto;
   }
 
   .step.active {
@@ -228,8 +234,8 @@
   }
 
   .step-icon {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     background: var(--muted);
     border-radius: 50%;
     display: flex;
@@ -239,7 +245,6 @@
     z-index: 1;
     border: 2px solid var(--border);
     transition: all 0.3s ease;
-    font-size: 20px;
   }
 
   .step.active .step-icon {
@@ -278,51 +283,37 @@
     line-height: 1.6;
   }
 
-  .button-indicators {
+  .button-image-container {
     display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
-  }
-
-  .button-indicator {
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .button-red {
-    background: rgba(239, 68, 68, 0.1);
-    color: rgb(239, 68, 68);
-  }
-
-  .button-green {
-    background: rgba(16, 185, 129, 0.1);
-    color: rgb(16, 185, 129);
-  }
-
-  .card-cancel-button {
-    display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    padding: 1rem 2rem;
+    margin-top: 0.75rem;
+  }
+
+  .button-image {
+    width: 60px;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .cart-style-cancel-button {
     background: transparent;
+    color: #64748b;
     border: 2px solid var(--border);
-    color: var(--error);
+    min-width: 300px;
+    padding: 1rem 2rem;
     border-radius: var(--radius);
     font-weight: 600;
+    font-size: 1rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    margin: 3rem auto 0;
-    max-width: 300px;
-    width: 100%;
   }
 
-  .card-cancel-button:hover {
-    background: var(--error);
-    color: white;
-    border-color: var(--error);
+  .cart-style-cancel-button:hover {
+    background: var(--muted);
+    border-color: var(--muted-foreground);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
   }
 
   .payment-status.active {
@@ -330,12 +321,12 @@
   }
 
   .card-footer {
-    margin-top: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    margin-top: 2rem;
+    margin-top: auto;
+    flex-shrink: 0;
   }
 
   .countdown-container {
@@ -367,10 +358,6 @@
   }
 
   .card-status {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
     font-size: 1rem;
     color: var(--primary);
     margin-bottom: 1.5rem;
@@ -378,6 +365,7 @@
     background: rgba(0, 129, 167, 0.1);
     border-radius: var(--radius);
     font-weight: 500;
+    text-align: center;
   }
 
   /* Responsive design */

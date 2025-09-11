@@ -163,7 +163,7 @@
     flex-direction: column;
     gap: 0.75rem;
     max-width: 600px;
-    margin: 0 auto;
+    margin: 0 auto 2rem auto;
     position: relative;
     flex: 1;
     min-height: 0;

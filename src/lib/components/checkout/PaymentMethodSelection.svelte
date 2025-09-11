@@ -63,6 +63,10 @@
    * @type {() => void}
    */
   export let onSimulateRefusedPayment;
+  /**
+   * @type {() => void}
+   */
+  export let onSimulateCardPayment;
 </script>
 
 <section class="section">
@@ -102,6 +106,9 @@
     <div class="debug-buttons">
       <button class="debug-button processing" onclick={onSimulateProcessingPayment}>
         ⏳ Processando (Cartão)
+      </button>
+      <button class="debug-button card-payment" onclick={onSimulateCardPayment}>
+        💳 Instruções Pinpad
       </button>
       <button class="debug-button pix-processing" onclick={onSimulatePixProcessing}>
         🔄 Preparando PIX
@@ -285,6 +292,17 @@
 
   .debug-button.processing:hover {
     background: #ffeaa7;
+    transform: translateY(-1px);
+  }
+
+  .debug-button.card-payment {
+    background: #e3f2fd;
+    color: #0d47a1;
+    border: 1px solid #bbdefb;
+  }
+
+  .debug-button.card-payment:hover {
+    background: #bbdefb;
     transform: translateY(-1px);
   }
 

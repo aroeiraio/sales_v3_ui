@@ -463,6 +463,14 @@
     startQRCodeCountdown(); // Start the countdown for debug
   }
 
+  function simulateCardPayment() {
+    paymentState = 'insert_tap_card';
+    selectedPayment = 'MERCADOPAGO_PINPAD-credit';
+    isProcessing = true;
+    paymentResult = null;
+    startCardPaymentCountdown(); // Start the 180s countdown for debug
+  }
+
   function simulateTimeoutScreen() {
     paymentState = 'payment_timeout';
     selectedPayment = 'MERCADOPAGO-mercadopago';
@@ -557,6 +565,7 @@
         onSimulateTimeoutScreen={simulateTimeoutScreen}
         onSimulateSuccessPayment={simulateSuccessPayment}
         onSimulateRefusedPayment={simulateRefusedPayment}
+        onSimulateCardPayment={simulateCardPayment}
       />
 
       <CheckoutSummary cart={cart} />

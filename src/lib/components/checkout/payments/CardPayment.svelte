@@ -44,54 +44,18 @@
   </div>
 
   <div class="steps-container">
-    <div class="step active">
+    <div class="step active single-step">
       <div class="step-icon">
         <Smartphone size={24} />
       </div>
       <div class="step-content">
         <h3 class="step-title">Pressione os Botões</h3>
         <p class="step-description">
-          Pressione os botões conforme a imagem abaixo para iniciar a operação
+          Siga as instruções da imagem abaixo para iniciar a operação
         </p>
         <div class="button-image-container">
-          <img src="/point_buttons.png" alt="Botões do Pinpad" class="button-image" />
+          <img src="/point_buttons.png" alt="Instruções dos Botões do Pinpad" class="button-image" />
         </div>
-      </div>
-    </div>
-
-    <div class="step">
-      <div class="step-icon">
-        <CreditCard size={24} />
-      </div>
-      <div class="step-content">
-        <h3 class="step-title">Aproxime ou Insira seu Cartão</h3>
-        <p class="step-description">
-          Aproxime seu cartão do leitor ou insira o chip para iniciar o pagamento
-        </p>
-      </div>
-    </div>
-
-    <div class="step">
-      <div class="step-icon">
-        <CheckCircle size={24} />
-      </div>
-      <div class="step-content">
-        <h3 class="step-title">Aguarde a Confirmação</h3>
-        <p class="step-description">
-          Não remova o cartão até que a transação seja concluída
-        </p>
-      </div>
-    </div>
-
-    <div class="step">
-      <div class="step-icon">
-        <ArrowLeft size={24} />
-      </div>
-      <div class="step-content">
-        <h3 class="step-title">Retire seu Cartão</h3>
-        <p class="step-description">
-          Retire seu cartão do Pinpad quando solicitado
-        </p>
       </div>
     </div>
   </div>
@@ -206,14 +170,18 @@
   }
 
   .steps-container::before {
-    content: '';
-    position: absolute;
-    left: 20px;
-    top: 40px;
-    bottom: 40px;
-    width: 2px;
-    background: var(--border);
-    z-index: 0;
+    display: none;
+  }
+
+  .single-step {
+    border: 2px solid var(--primary);
+    background: var(--card);
+  }
+
+  .single-step .step-icon {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
   }
 
   .step {
@@ -290,7 +258,8 @@
   }
 
   .button-image {
-    width: 60px;
+    width: 300px;
+    max-width: 100%;
     height: auto;
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);

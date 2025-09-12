@@ -28,8 +28,7 @@
 			// Initialize offline monitoring
 			offlineService.isOnline(); // This initializes the service
 			
-			// Initialize websocket connection for real-time notifications
-			console.log('Starting websocket connection...');
+			// Initialize websocket connection for real-time notifications (silent mode outside dashboard)
 			websocketService.connect();
 			
 			// Load visual settings

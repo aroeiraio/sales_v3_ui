@@ -482,39 +482,44 @@ class WebSocketService {
     currentState.sensors.drawersUnlocked = sensors['drawers-unlocked'];
     currentState.sensors.hatchOpened = sensors['hatch-opened'];
 
-    // Check for changes and notify user
-    if (previousSensors.doorOpened !== sensors['door-opened']) {
-      const messageKey = sensors['door-opened'] ? 'door-opened-true' : 'door-opened-false';
-      toastService.showInfo(translations.sensors[messageKey]);
-    }
+    // Check for changes and notify user (only in dashboard context)
+    if (this.shouldShowToastNotifications()) {
+      if (previousSensors.doorOpened !== sensors['door-opened']) {
+        const messageKey = sensors['door-opened'] ? 'door-opened-true' : 'door-opened-false';
+        toastService.showInfo(translations.sensors[messageKey]);
+      }
 
-    if (previousSensors.drawersUnlocked !== sensors['drawers-unlocked']) {
-      const messageKey = sensors['drawers-unlocked'] ? 'drawers-unlocked-true' : 'drawers-unlocked-false';
-      toastService.showInfo(translations.sensors[messageKey]);
-    }
+      if (previousSensors.drawersUnlocked !== sensors['drawers-unlocked']) {
+        const messageKey = sensors['drawers-unlocked'] ? 'drawers-unlocked-true' : 'drawers-unlocked-false';
+        toastService.showInfo(translations.sensors[messageKey]);
+      }
 
-    if (previousSensors.hatchOpened !== sensors['hatch-opened']) {
-      const messageKey = sensors['hatch-opened'] ? 'hatch-opened-true' : 'hatch-opened-false';
-      toastService.showInfo(translations.sensors[messageKey]);
+      if (previousSensors.hatchOpened !== sensors['hatch-opened']) {
+        const messageKey = sensors['hatch-opened'] ? 'hatch-opened-true' : 'hatch-opened-false';
+        toastService.showInfo(translations.sensors[messageKey]);
+      }
     }
   }
 
   private handleDeliveryMessage(message: WebSocketMessage, currentState: DispenserState) {
     if (!message.data.value) return;
 
-    if (message.data.value === 'delivered') {
-      toastService.showSuccess(translations.delivery.delivered);
-    } else if (message.data.value === 'ready for picking' && message.data.items) {
-      const notDetectedItems = message.data.items.filter(item => !item.detected);
-      
-      if (notDetectedItems.length > 0) {
-        notDetectedItems.forEach(item => {
-          const messageText = translations.delivery['ready-for-picking-not-detected']
-            .replace('{slot}', item.item_literal);
-          toastService.showWarning(messageText);
-        });
-      } else {
-        toastService.showSuccess(translations.delivery['ready-for-picking']);
+    // Only show delivery notifications in dashboard context
+    if (this.shouldShowToastNotifications()) {
+      if (message.data.value === 'delivered') {
+        toastService.showSuccess(translations.delivery.delivered);
+      } else if (message.data.value === 'ready for picking' && message.data.items) {
+        const notDetectedItems = message.data.items.filter(item => !item.detected);
+        
+        if (notDetectedItems.length > 0) {
+          notDetectedItems.forEach(item => {
+            const messageText = translations.delivery['ready-for-picking-not-detected']
+              .replace('{slot}', item.item_literal);
+            toastService.showWarning(messageText);
+          });
+        } else {
+          toastService.showSuccess(translations.delivery['ready-for-picking']);
+        }
       }
     }
   }
@@ -527,8 +532,8 @@ class WebSocketService {
 
     currentState.status = newStatus;
 
-    // Only notify if status actually changed
-    if (previousStatus !== newStatus) {
+    // Only notify if status actually changed and in dashboard context
+    if (previousStatus !== newStatus && this.shouldShowToastNotifications()) {
       const statusText = translations.deviceStatus[newStatus] || translations.deviceStatus.UNKNOWN;
       toastService.showInfo(`Status: ${statusText}`);
     }
@@ -539,7 +544,8 @@ class WebSocketService {
 
     const detection = message.data.data;
     
-    if (!detection.detected) {
+    // Only show item detection notifications in dashboard context
+    if (!detection.detected && this.shouldShowToastNotifications()) {
       const messageText = translations.itemDetection['not-detected']
         .replace('{slot}', detection.item_literal);
       toastService.showWarning(messageText);

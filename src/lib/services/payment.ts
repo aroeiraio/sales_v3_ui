@@ -271,6 +271,10 @@ class PaymentService {
         return { broker: 'MERCADOPAGO_PINPAD', method: 'credit' };
       } else if (broker === 'MERCADOPAGO_PINPAD' && method === 'debit') {
         return { broker: 'MERCADOPAGO_PINPAD', method: 'debit' };
+      } else if (broker === 'TEST_PAYMENT' && method === 'credit') {
+        return { broker: 'TEST_PAYMENT', method: 'credit' };
+      } else if (broker === 'TEST_PAYMENT' && method === 'debit') {
+        return { broker: 'TEST_PAYMENT', method: 'debit' };
       } else {
         throw new Error(`Unsupported payment method combination: ${broker}-${method}`);
       }

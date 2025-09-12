@@ -9,6 +9,7 @@
 	import { analyticsService } from '$lib/services/analytics';
 	import { performanceService } from '$lib/services/performance';
 	import { offlineService } from '$lib/services/offline';
+	import { websocketService } from '$lib/services/websocketService';
 
 	let { children } = $props();
 	let settings: any = $state(null);
@@ -26,6 +27,10 @@
 			
 			// Initialize offline monitoring
 			offlineService.isOnline(); // This initializes the service
+			
+			// Initialize websocket connection for real-time notifications
+			console.log('Starting websocket connection...');
+			websocketService.connect();
 			
 			// Load visual settings
 			console.log('Starting visual settings load...');
@@ -65,6 +70,7 @@
 		return () => {
 			analyticsService.trackSessionEnd();
 			analyticsService.flush();
+			websocketService.disconnect();
 		};
 	});
 

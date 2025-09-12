@@ -21,6 +21,7 @@
 	} from '$lib/stores/digitalSignage';
 	import { sessionService } from '$lib/services/session';
 	import { appState } from '$lib/stores/app';
+	import DashboardStart from '$lib/components/dashboard/DashboardStart.svelte';
 
 	let videoElement = $state<HTMLVideoElement>();
 	let isMuted = $state(true);
@@ -181,6 +182,9 @@
 		</main>
 	{/if}
 </div>
+
+<!-- Dashboard Access -->
+<DashboardStart />
 
 <style>
 	:global(html) {

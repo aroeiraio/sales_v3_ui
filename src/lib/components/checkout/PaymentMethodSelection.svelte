@@ -100,7 +100,8 @@
     </div>
   {/if}
 
-  <!-- Debug buttons for testing payment states -->
+  <!-- Debug buttons for testing payment states - HIDDEN FOR PRODUCTION -->
+  <!-- 
   <div class="debug-section">
     <h3 class="debug-title">🧪 Debug - Testar Estados</h3>
     <div class="debug-buttons">
@@ -130,6 +131,7 @@
       </button>
     </div>
   </div>
+  -->
 </section>
 
 <style>

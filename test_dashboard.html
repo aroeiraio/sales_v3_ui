@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .test-section { 
+            background: white; 
+            padding: 20px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Dashboard Integration Test</h1>
+    
+    <div class="test-section">
+        <h2>📍 Current Status</h2>
+        <div class="status success">
+            ✅ Development server running at <strong>http://localhost:8092/</strong>
+        </div>
+        <div class="status success">
+            ✅ Dashboard moved to root route (<strong>/</strong>) instead of <code>/dashboard</code>
+        </div>
+        <div class="status success">
+            ✅ Fixed dynamic import errors by using static imports
+        </div>
+        <div class="status success">
+            ✅ Components properly styled as overlays
+        </div>
+        <div class="status success">
+            ✅ Fixed API 406 error by converting password to number format
+        </div>
+        <div class="status success">
+            ✅ Fixed onLogout reference error in DashboardView
+        </div>
+        <div class="status success">
+            ✅ Enhanced API error handling with detailed messages
+        </div>
+        <div class="status success">
+            ✅ Combined Lock/Unlock hatch into single toggle element
+        </div>
+        <div class="status success">
+            ✅ Added position selector grid (A1-F10) for Test Motor
+        </div>
+        <div class="status success">
+            ✅ Translated all UI text to Portuguese
+        </div>
+        <div class="status success">
+            ✅ Added robust stock data validation and filtering
+        </div>
+        <div class="status success">
+            ✅ Handle invalid API payloads (timestamp objects filtered out)
+        </div>
+        <div class="status success">
+            ✅ Visual warnings for expired/missing expiration dates
+        </div>
+        <div class="status success">
+            ✅ Handle DISPENSER_UNAVAILABLE errors with toast notifications
+        </div>
+        <div class="status success">
+            ✅ Prevent state changes on hardware errors (Portinhola)
+        </div>
+        <div class="status success">
+            ✅ Renamed "Escotilha" to "Portinhola" throughout UI
+        </div>
+        <div class="status success">
+            ✅ Fixed API client to detect errors in successful HTTP responses (200 OK + msg_code)
+        </div>
+        <div class="status success">
+            ✅ Connected error handler to toast notifications for user feedback
+        </div>
+        <div class="status success">
+            ✅ Enhanced state protection prevents button changes on hardware errors
+        </div>
+        <div class="status success">
+            ✅ Login screen now presets "repositor" username (no username field)
+        </div>
+        <div class="status success">
+            ✅ Added numeric virtual keyboard for password input (touch-friendly)
+        </div>
+        <div class="status success">
+            ✅ Enhanced restock dialog with touch-friendly +/- quantity buttons
+        </div>
+        <div class="status success">
+            ✅ Stock table auto-refreshes 2 seconds after restock operations
+        </div>
+        <div class="status success">
+            ✅ Sair button performs logout API call AND redirects to Start Screen (robust error handling)
+        </div>
+        <div class="status success">
+            ✅ Fixed API client to distinguish success codes (UPDATE_ACCEPTED) from error codes
+        </div>
+        <div class="status success">
+            ✅ Restock dialog now properly closes on successful stock updates
+        </div>
+        <div class="status success">
+            ✅ Enhanced login error messages: HTTP 406 shows "Senha incorreta"
+        </div>
+        <div class="status success">
+            ✅ Updated Testar Motor API to use numeric coil IDs (A1→1, B1→11, etc.)
+        </div>
+        <div class="status success">
+            ✅ Hidden debug section "Debug - Testar Estados" from Checkout Screen
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🎯 How to Test</h2>
+        <ol>
+            <li>Open <a href="http://localhost:8092/" target="_blank">http://localhost:8092/</a></li>
+            <li>Look for the small <strong>⚙️ gear icon</strong> in the bottom-right corner</li>
+            <li>Either:
+                <ul>
+                    <li><strong>Long press</strong> (hold) for 10 seconds - watch progress ring</li>
+                    <li><strong>Double-click</strong> quickly as alternative</li>
+                </ul>
+            </li>
+            <li>Login screen should appear as overlay</li>
+            <li>Enter credentials:
+                <ul>
+                    <li><strong>Username:</strong> repositor</li>
+                    <li><strong>Password:</strong> 1234</li>
+                </ul>
+            </li>
+            <li>Dashboard should appear with action cards</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>✨ Features Available</h2>
+        <div class="status info">
+            <strong>📊 Dashboard Actions (Portuguese UI):</strong>
+            <ul>
+                <li>🚪 <strong>Controle da Porta</strong> - Abrir a porta principal</li>
+                <li>🔒/🔓 <strong>Controle da Portinhola</strong> - Travar/Destravar (toggle único)</li>
+                <li>⚙️ <strong>Testar Motor</strong> - Seletor de posições A1-F10</li>
+                <li>📦 <strong>Gestão de Estoque</strong> - Gerenciar inventário
+                <ul>
+                    <li>⚠️ Visual warnings for missing/expired dates</li>
+                    <li>🔧 Filters invalid data and timestamp objects</li>
+                    <li>📊 Shows expiration status with color coding</li>
+                </ul>
+            </li>
+            </ul>
+        </div>
+        <div class="status info">
+            <strong>🔐 Security:</strong>
+            <ul>
+                <li>Session auto-renewal (5 minutes)</li>
+                <li>Inactivity timeout (60 seconds)</li>
+                <li>Proper logout functionality</li>
+            </ul>
+        </div>
+        <div class="status info">
+            <strong>📱 UI/UX:</strong>
+            <ul>
+                <li>Mobile-responsive design</li>
+                <li>Touch-friendly interactions</li>
+                <li>Error handling with toast notifications</li>
+                <li>Loading states for all actions</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 API Endpoints (for reference)</h2>
+        <div class="status info">
+            All endpoints use base URL: <code>http://localhost:8090/interface/dashboard</code>
+            <ul>
+                <li><code>POST /login/</code> - Authentication</li>
+                <li><code>DELETE /login/</code> - Logout</li>
+                <li><code>GET /login/renew</code> - Session renewal</li>
+                <li><code>POST /dispenser/open-door</code> - Open door</li>
+                <li><code>POST /dispenser/handle-hatch</code> - Lock/unlock hatch</li>
+                <li><code>POST /dispenser/delivery/</code> - Test motor</li>
+                <li><code>GET /stock/</code> - Get inventory</li>
+                <li><code>PUT /stock/</code> - Update stock</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🐛 Troubleshooting</h2>
+        <div class="status info">
+            <strong>If long press doesn't work:</strong>
+            <ul>
+                <li>Try double-clicking the gear icon</li>
+                <li>Check browser console for errors (F12)</li>
+                <li>Ensure you're on the correct port (8092, not 8098)</li>
+            </ul>
+        </div>
+        <div class="status info">
+            <strong>If login fails:</strong>
+            <ul>
+                <li>Verify API server is running on port 8090</li>
+                <li>Check network tab for API response codes</li>
+                <li>Try credentials: repositor / 1234</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Simple status check
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('✅ Dashboard test page loaded');
+            console.log('🔗 Main app: http://localhost:8092/');
+            console.log('⚙️ Look for gear icon in bottom-right corner');
+        });
+    </script>
+</body>
+</html>

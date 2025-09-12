@@ -224,6 +224,10 @@
   function selectPaymentMethod(methodId: string) {
     if (isProcessing || paymentState !== 'idle') return;
     
+    // Clear any existing payment timers before starting new payment method
+    clearQRCodeCountdown();
+    clearCardPaymentCountdown();
+    
     selectedPayment = methodId;
     
     // Start payment processing after a short delay
@@ -259,6 +263,10 @@
   }
 
   function resetPaymentState() {
+    // Clear all payment timers before resetting state
+    clearQRCodeCountdown();
+    clearCardPaymentCountdown();
+    
     paymentState = 'idle';
     selectedPayment = '';
     // Restart timeout when returning to idle state

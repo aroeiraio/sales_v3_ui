@@ -693,6 +693,30 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
+		width: auto;
+		min-width: 300px; /* Ensure enough space for button text */
+	}
+
+	/* Ensure button in video overlay behaves identically */
+	.video-button-overlay .start-button {
+		white-space: nowrap; /* Prevent text wrapping */
+		width: auto;
+		min-width: fit-content;
+	}
+
+	/* Responsive adjustments for video button overlay */
+	@media (max-width: 480px) {
+		.video-button-overlay {
+			min-width: 280px; /* Adjust for smaller screens */
+			left: 50%;
+			transform: translateX(-50%);
+		}
+	}
+
+	@media (min-width: 768px) {
+		.video-button-overlay {
+			min-width: 400px; /* More space on larger screens */
+		}
 	}
 
 

@@ -16,8 +16,7 @@
 		currentVideoUrl,
 		isPlaying,
 		isFullscreen,
-		playlistProgress,
-		digitalSignageRefreshTimer
+		playlistProgress
 	} from '$lib/stores/digitalSignage';
 	import { sessionService } from '$lib/services/session';
 	import { systemStatusService } from '$lib/services/systemStatus';
@@ -57,10 +56,9 @@
 		
 		document.addEventListener('fullscreenchange', handleFullscreenChange);
 
-		// Start the 15-minute refresh timers
-		// These are automatically managed by the stores
+		// Start the visual settings refresh timer (digital signage now refreshes after playlist ends)
+		// This is automatically managed by the store
 		visualSettingsRefreshTimer;
-		digitalSignageRefreshTimer;
 
 		return () => {
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);

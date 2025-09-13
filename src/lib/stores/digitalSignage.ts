@@ -93,6 +93,15 @@ export const digitalSignageActions = {
       );
       const nextIndex = index + 1 < urls.length ? index + 1 : 0; // Loop back to start
       console.log(`Digital signage: Moving from video ${index} to video ${nextIndex} (total: ${urls.length} videos)`);
+      
+      // If we're looping back to the start (reached end of playlist), refresh data
+      if (nextIndex === 0 && index + 1 >= urls.length) {
+        console.log('Digital signage: End of playlist reached, refreshing digital signage data');
+        this.refreshSignageData().catch(error => {
+          console.error('Failed to refresh digital signage data after playlist end:', error);
+        });
+      }
+      
       return nextIndex;
     });
   },
@@ -108,6 +117,19 @@ export const digitalSignageActions = {
 
   onVideoEnded(): void {
     console.log('Digital signage: Video ended, moving to next video');
+    
+    // Check if we only have one video (single video playlist)
+    const urls = digitalSignageService.getMediaUrls(
+      digitalSignageService.filterValidItems(get(digitalSignageItems))
+    );
+    
+    if (urls.length === 1) {
+      console.log('Digital signage: Single video playlist detected, refreshing data after video end');
+      this.refreshSignageData().catch(error => {
+        console.error('Failed to refresh digital signage data after single video end:', error);
+      });
+    }
+    
     this.nextVideo();
   },
 
@@ -132,17 +154,8 @@ export const digitalSignageActions = {
   },
 
   async refreshSignageData(): Promise<void> {
+    console.log('Digital signage: Refreshing signage data from API');
     await this.loadSignageData();
-  },
-
-  needsRefresh(): boolean {
-    const lastFetch = get(digitalSignageLastFetch);
-    if (!lastFetch) return true;
-    
-    const now = new Date();
-    const refreshInterval = 180 * 1000; // 180 seconds (3 minutes) in milliseconds
-    
-    return (now.getTime() - lastFetch.getTime()) > refreshInterval;
   },
 
   enterFullscreen(element?: HTMLElement): Promise<void> {
@@ -180,13 +193,6 @@ export const digitalSignageActions = {
   }
 };
 
-// Auto-refresh timer (15 minutes)
-export const digitalSignageRefreshTimer = readable(null, (set) => {
-  const interval = setInterval(() => {
-    if (digitalSignageActions.needsRefresh()) {
-      digitalSignageActions.refreshSignageData();
-    }
-  }, 180 * 1000); // 180 seconds (3 minutes)
-
-  return () => clearInterval(interval);
-});
+// Note: Digital signage now refreshes after each complete playlist cycle
+// instead of using a timer-based approach. The refresh happens in nextVideo()
+// when looping back to the first video after reaching the end of the playlist.

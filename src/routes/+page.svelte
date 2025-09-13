@@ -164,15 +164,9 @@
 
 			<!-- Minimal overlay - only button -->
 			<div class="video-overlay-content">
-				<!-- Status Bar over video -->
-				<div class="video-status-bar">
-					<div></div>
-					<div class="time">{$appState.currentTime.toLocaleTimeString('pt-BR')}</div>
-				</div>
-
 				<!-- Button overlay at bottom -->
 				<div class="video-button-overlay">
-					<button class="start-button-video" onclick={startShopping}>
+					<button class="start-button" onclick={startShopping}>
 						<ShoppingCart size={24} />
 						Começar Compra
 					</button>
@@ -686,23 +680,6 @@
 	}
 
 
-	/* Status bar over video */
-	.video-status-bar {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		background: rgba(0, 129, 167, 0.9);
-		backdrop-filter: blur(10px);
-		color: white;
-		padding: 0.75rem 2rem;
-		font-size: 0.875rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		z-index: 10;
-		box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.3);
-	}
 
 
 	/* Button overlay at bottom */
@@ -718,111 +695,6 @@
 		gap: 1rem;
 	}
 
-	.start-button-video {
-		background: linear-gradient(135deg, var(--bittersweet) 0%, #ff8500 100%);
-		color: white;
-		border: none;
-		padding: 1.5rem 4rem;
-		border-radius: 1.25rem;
-		font-size: 1.5rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		box-shadow: 
-			0 15px 35px rgba(240, 113, 103, 0.4),
-			0 0 0 0 rgba(255, 255, 255, 0);
-		min-height: 2.75rem;
-		position: relative;
-		overflow: hidden;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.75rem;
-		animation: fadeIn 1s ease-out 0.6s both, buttonPulse 3s infinite 2s;
-		backdrop-filter: blur(15px);
-		border: 2px solid rgba(255, 255, 255, 0.2);
-	}
-
-	.start-button-video::before {
-		content: "";
-		position: absolute;
-		top: 0;
-		left: -100%;
-		width: 100%;
-		height: 100%;
-		background: linear-gradient(
-			90deg,
-			transparent,
-			rgba(255, 255, 255, 0.3),
-			transparent
-		);
-		animation: shimmer 3s infinite;
-	}
-
-	.start-button-video:hover {
-		transform: translateY(-4px) scale(1.05);
-		box-shadow: 
-			0 20px 50px rgba(240, 113, 103, 0.5),
-			0 0 0 8px rgba(255, 255, 255, 0.1);
-		animation: none;
-	}
-
-	.start-button-video:active {
-		transform: translateY(-1px) scale(1.02);
-		box-shadow: 
-			0 10px 25px rgba(240, 113, 103, 0.4),
-			0 0 0 4px rgba(255, 255, 255, 0.1);
-	}
 
 
-	@keyframes buttonPulse {
-		0%, 100% {
-			box-shadow: 
-				0 15px 35px rgba(240, 113, 103, 0.4),
-				0 0 0 0 rgba(255, 255, 255, 0);
-		}
-		50% {
-			box-shadow: 
-				0 20px 45px rgba(240, 113, 103, 0.5),
-				0 0 0 8px rgba(255, 255, 255, 0.1);
-		}
-	}
-
-	/* Responsive adjustments for video overlay */
-	@media (min-width: 768px) and (min-height: 1024px) {
-		.start-button-video {
-			padding: 2rem 5rem;
-			font-size: 1.75rem;
-		}
-	}
-
-	@media (min-width: 1080px) and (min-height: 1920px) {
-		.start-button-video {
-			padding: 2.5rem 6rem;
-			font-size: 2rem;
-		}
-
-		.video-status-bar {
-			padding: 1rem 3rem;
-			font-size: 1rem;
-		}
-	}
-
-	@media (max-width: 768px) {
-		.start-button-video {
-			padding: 1.25rem 3rem;
-			font-size: 1.25rem;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.video-status-bar {
-			padding: 0.75rem 1rem;
-		}
-		
-		.start-button-video {
-			padding: 1.25rem 2rem;
-			font-size: 1.125rem;
-		}
-	}
 </style>

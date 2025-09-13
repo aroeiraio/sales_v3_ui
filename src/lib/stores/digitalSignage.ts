@@ -137,9 +137,9 @@ export const digitalSignageActions = {
     if (!lastFetch) return true;
     
     const now = new Date();
-    const fifteenMinutes = 15 * 60 * 1000; // 15 minutes in milliseconds
+    const refreshInterval = 180 * 1000; // 180 seconds (3 minutes) in milliseconds
     
-    return (now.getTime() - lastFetch.getTime()) > fifteenMinutes;
+    return (now.getTime() - lastFetch.getTime()) > refreshInterval;
   },
 
   enterFullscreen(element?: HTMLElement): Promise<void> {
@@ -183,7 +183,7 @@ export const digitalSignageRefreshTimer = readable(null, (set) => {
     if (digitalSignageActions.needsRefresh()) {
       digitalSignageActions.refreshSignageData();
     }
-  }, 15 * 60 * 1000); // 15 minutes
+  }, 180 * 1000); // 180 seconds (3 minutes)
 
   return () => clearInterval(interval);
 });

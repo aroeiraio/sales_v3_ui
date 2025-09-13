@@ -95,19 +95,19 @@ export const visualSettingsActions = {
     if (!lastFetch) return true;
     
     const now = new Date();
-    const fifteenMinutes = 15 * 60 * 1000; // 15 minutes in milliseconds
+    const refreshInterval = 180 * 1000; // 180 seconds (3 minutes) in milliseconds
     
-    return (now.getTime() - lastFetch.getTime()) > fifteenMinutes;
+    return (now.getTime() - lastFetch.getTime()) > refreshInterval;
   }
 };
 
-// Auto-refresh timer (15 minutes)
+// Auto-refresh timer (180 seconds)
 export const visualSettingsRefreshTimer = readable(null, (set) => {
   const interval = setInterval(() => {
     if (visualSettingsActions.needsRefresh()) {
       visualSettingsActions.refreshSettings();
     }
-  }, 15 * 60 * 1000); // 15 minutes
+  }, 180 * 1000); // 180 seconds (3 minutes)
 
   return () => clearInterval(interval);
 });

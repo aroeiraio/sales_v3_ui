@@ -192,12 +192,12 @@
 		position: fixed;
 		bottom: 20px;
 		right: 20px;
-		z-index: 999;
+		z-index: 1001; /* Above video player z-index: 1000 */
 	}
 
 	.dashboard-trigger {
-		width: 60px;
-		height: 60px;
+		width: 64px; /* Minimum 44x44px, using 64x64px for better touch target */
+		height: 64px;
 		border-radius: 50%;
 		background: rgba(0, 0, 0, 0.1);
 		border: none;

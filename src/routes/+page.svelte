@@ -146,6 +146,7 @@
 				src={$currentVideoUrl}
 				autoplay
 				muted={isMuted}
+				loop
 				onclick={handleVideoClick}
 				onended={handleVideoEnded}
 				onloadeddata={handleVideoLoad}

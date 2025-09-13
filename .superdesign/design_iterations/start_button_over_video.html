@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Começar Compra Button Over Video - Design Mockup</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        .video-background {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: brightness(0.7); /* Slightly dim video for better button contrast */
+        }
+
+        /* Status Bar over video */
+        .status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 129, 167, 0.9);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 0.75rem 2rem;
+            font-size: 0.875rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Button overlay container */
+        .button-overlay {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Logo over video */
+        .logo-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .logo {
+            width: 180px;
+            height: 180px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0081a7;
+            box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(20px);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+            animation: fadeIn 1s ease-out, logoFloat 4s ease-in-out infinite;
+        }
+
+        .logo::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.2) 100%);
+        }
+
+        .welcome-text {
+            color: white;
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
+            animation: fadeIn 1s ease-out 0.2s both;
+        }
+
+        .welcome-subtext {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.25rem;
+            margin-bottom: 3rem;
+            text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.7);
+            animation: fadeIn 1s ease-out 0.4s both;
+        }
+
+        /* Enhanced start button for video overlay */
+        .start-button {
+            background: linear-gradient(135deg, #f07167 0%, #ff8500 100%);
+            color: white;
+            border: none;
+            padding: 1.5rem 4rem;
+            border-radius: 1.25rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 
+                0 15px 35px rgba(240, 113, 103, 0.4),
+                0 0 0 0 rgba(255, 255, 255, 0);
+            min-height: 2.75rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            animation: fadeIn 1s ease-out 0.6s both, buttonPulse 3s infinite 2s;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .start-button::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.3),
+                transparent
+            );
+            animation: shimmer 3s infinite;
+        }
+
+        .start-button:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 
+                0 20px 50px rgba(240, 113, 103, 0.5),
+                0 0 0 8px rgba(255, 255, 255, 0.1);
+            animation: none;
+        }
+
+        .start-button:active {
+            transform: translateY(-1px) scale(1.02);
+            box-shadow: 
+                0 10px 25px rgba(240, 113, 103, 0.4),
+                0 0 0 4px rgba(255, 255, 255, 0.1);
+        }
+
+        /* Dashboard button - enhanced for video */
+        .dashboard-access {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 15;
+        }
+
+        .dashboard-trigger {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(15px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .dashboard-trigger:hover {
+            background: rgba(59, 130, 246, 0.7);
+            color: white;
+            transform: scale(1.1);
+            box-shadow: 0 12px 30px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Enhanced overlay effects */
+        .video-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                135deg,
+                rgba(0, 129, 167, 0.1) 0%,
+                rgba(0, 175, 181, 0.05) 50%,
+                rgba(240, 113, 103, 0.1) 100%
+            );
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Floating elements for ambience */
+        .floating-element {
+            position: fixed;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            z-index: 3;
+            animation: float 8s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        .element-1 {
+            width: 200px;
+            height: 200px;
+            bottom: -100px;
+            right: -50px;
+            animation-delay: 0s;
+        }
+
+        .element-2 {
+            width: 150px;
+            height: 150px;
+            top: -75px;
+            left: -25px;
+            animation-delay: 1s;
+        }
+
+        .element-3 {
+            width: 100px;
+            height: 100px;
+            bottom: 20%;
+            left: 5%;
+            animation-delay: 2s;
+        }
+
+        .element-4 {
+            width: 80px;
+            height: 80px;
+            top: 15%;
+            right: 8%;
+            animation-delay: 3s;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes logoFloat {
+            0%, 100% {
+                transform: translate(-50%, -50%) translateY(0);
+            }
+            50% {
+                transform: translate(-50%, -50%) translateY(-10px);
+            }
+        }
+
+        @keyframes shimmer {
+            100% {
+                left: 100%;
+            }
+        }
+
+        @keyframes buttonPulse {
+            0%, 100% {
+                box-shadow: 
+                    0 15px 35px rgba(240, 113, 103, 0.4),
+                    0 0 0 0 rgba(255, 255, 255, 0);
+            }
+            50% {
+                box-shadow: 
+                    0 20px 45px rgba(240, 113, 103, 0.5),
+                    0 0 0 8px rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        /* Responsive adjustments */
+        @media (min-width: 768px) and (min-height: 1024px) {
+            .welcome-text {
+                font-size: 2.5rem;
+            }
+            
+            .logo {
+                width: 200px;
+                height: 200px;
+                font-size: 2.2rem;
+            }
+
+            .welcome-subtext {
+                font-size: 1.4rem;
+            }
+
+            .start-button {
+                padding: 2rem 5rem;
+                font-size: 1.75rem;
+            }
+        }
+
+        @media (min-width: 1080px) and (min-height: 1920px) {
+            .welcome-text {
+                font-size: 3rem;
+            }
+            
+            .logo {
+                width: 250px;
+                height: 250px;
+                font-size: 2.5rem;
+            }
+
+            .welcome-subtext {
+                font-size: 1.6rem;
+            }
+
+            .start-button {
+                padding: 2.5rem 6rem;
+                font-size: 2rem;
+            }
+
+            .status-bar {
+                padding: 1rem 3rem;
+                font-size: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .welcome-text {
+                font-size: 1.75rem;
+            }
+            
+            .logo {
+                width: 150px;
+                height: 150px;
+                font-size: 1.5rem;
+            }
+
+            .welcome-subtext {
+                font-size: 1.125rem;
+            }
+
+            .start-button {
+                padding: 1.25rem 3rem;
+                font-size: 1.25rem;
+            }
+        }
+
+        /* Demo controls */
+        .demo-controls {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+        }
+
+        .demo-controls h3 {
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: #fbbf24;
+        }
+
+        .demo-controls p {
+            font-size: 0.75rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Video Background -->
+    <div class="video-container">
+        <video 
+            class="video-background" 
+            autoplay 
+            loop 
+            muted 
+            playsinline
+            poster="https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?w=1920&h=1080&fit=crop"
+        >
+            <source src="https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4" type="video/mp4">
+            <!-- Fallback background image if video doesn't load -->
+            <div style="background: linear-gradient(135deg, #0081a7 0%, #00afb5 100%); width: 100%; height: 100%;"></div>
+        </video>
+    </div>
+
+    <!-- Video overlay for color tinting -->
+    <div class="video-overlay"></div>
+
+    <!-- Floating ambient elements -->
+    <div class="floating-element element-1"></div>
+    <div class="floating-element element-2"></div>
+    <div class="floating-element element-3"></div>
+    <div class="floating-element element-4"></div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div></div>
+        <div class="time" id="currentTime">15:42:13</div>
+    </div>
+
+    <!-- Logo and welcome content overlay -->
+    <div class="logo-overlay">
+        <div class="logo">LOGO</div>
+        <h1 class="welcome-text">Bem-vindo à Máquina de Vendas</h1>
+        <p class="welcome-subtext">Escolha seus produtos favoritos com facilidade</p>
+    </div>
+
+    <!-- Button overlay at bottom -->
+    <div class="button-overlay">
+        <button class="start-button" onclick="handleStartShopping()">
+            <i data-lucide="shopping-cart"></i>
+            Começar Compra
+        </button>
+    </div>
+
+    <!-- Dashboard Access Button -->
+    <div class="dashboard-access">
+        <button class="dashboard-trigger" onclick="handleDashboardAccess()">
+            ⚙️
+        </button>
+    </div>
+
+    <!-- Demo Controls -->
+    <div class="demo-controls">
+        <h3>🎬 Design Mockup</h3>
+        <p><strong>Scenario:</strong> "Começar Compra" button over video playback</p>
+        <p><strong>Features:</strong></p>
+        <p>• Enhanced backdrop blur & shadows for visibility</p>
+        <p>• Preserved button animations & effects</p>
+        <p>• Improved contrast with video dimming</p>
+        <p>• Responsive design maintained</p>
+        <p>• Dashboard button positioned above video layer</p>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = 
+                now.toLocaleTimeString('pt-BR');
+        }
+        
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Demo functions
+        function handleStartShopping() {
+            alert('🛒 "Começar Compra" button clicked!\n\nIn real implementation, this would:\n1. Check system status for blocking conditions\n2. Start shopping session\n3. Navigate to products page');
+        }
+
+        function handleDashboardAccess() {
+            alert('⚙️ Dashboard access button clicked!\n\nThis demonstrates the enhanced visibility of the dashboard button over video background.');
+        }
+
+        // Add some interactivity
+        document.querySelector('.start-button').addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-4px) scale(1.05)';
+        });
+
+        document.querySelector('.start-button').addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    </script>
+</body>
+</html>

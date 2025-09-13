@@ -20,6 +20,7 @@
 		digitalSignageRefreshTimer
 	} from '$lib/stores/digitalSignage';
 	import { sessionService } from '$lib/services/session';
+	import { systemStatusService } from '$lib/services/systemStatus';
 	import { appState } from '$lib/stores/app';
 	import DashboardStart from '$lib/components/dashboard/DashboardStart.svelte';
 
@@ -69,17 +70,32 @@
 
 	async function startShopping() {
 		try {
-			console.log('Starting shopping - calling sessionService.startSession()');
+			console.log('Starting shopping - checking system status first');
 			// Stop any video playback
 			digitalSignageActions.stopPlayback();
 			
-			// Start session and navigate
+			// Check for blocking conditions before starting session
+			const { isBlocked, reasons } = await systemStatusService.checkSystemBlocking();
+			
+			if (isBlocked) {
+				console.log('System is blocked, navigating to out-of-service page with reasons:', reasons);
+				// Navigate to out of service page with reasons
+				const reasonsParam = encodeURIComponent(JSON.stringify(reasons));
+				window.location.href = `/out-of-service?reasons=${reasonsParam}`;
+				return;
+			}
+			
+			console.log('System is ready, starting session');
+			// Start session and navigate to products
 			await sessionService.startSession();
 			console.log('Session started successfully, navigating to products');
 			window.location.href = '/products';
 		} catch (error) {
 			console.error('Error in startShopping:', error);
-			// Error is handled by sessionService
+			// If there's an error checking status, show out of service as fallback
+			const fallbackReasons = ['Erro de comunicação com o sistema'];
+			const reasonsParam = encodeURIComponent(JSON.stringify(fallbackReasons));
+			window.location.href = `/out-of-service?reasons=${reasonsParam}`;
 		}
 	}
 

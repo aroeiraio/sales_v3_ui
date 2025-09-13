@@ -162,35 +162,12 @@
 				<track kind="captions" />
 			</video>
 
-			<!-- Overlay content on video -->
+			<!-- Minimal overlay - only button -->
 			<div class="video-overlay-content">
 				<!-- Status Bar over video -->
 				<div class="video-status-bar">
 					<div></div>
 					<div class="time">{$appState.currentTime.toLocaleTimeString('pt-BR')}</div>
-				</div>
-
-				<!-- Video overlay gradient -->
-				<div class="video-overlay-gradient"></div>
-
-				<!-- Floating elements for ambience -->
-				<div class="floating-element element-1"></div>
-				<div class="floating-element element-2"></div>
-				<div class="floating-element element-3"></div>
-				<div class="floating-element element-4"></div>
-
-				<!-- Logo and welcome content overlay -->
-				<div class="video-logo-overlay">
-					<div class="logo-container">
-						{#if $hasLogotype && $visualSettings?.logotype_image}
-							<img src={$visualSettings.logotype_image} alt="Logo" class="logo-image-video" />
-						{:else}
-							<div class="logo-video">LOGO</div>
-						{/if}
-					</div>
-					
-					<h1 class="welcome-text-video">Bem-vindo à Máquina de Vendas</h1>
-					<p class="welcome-subtext-video">Escolha seus produtos favoritos com facilidade</p>
 				</div>
 
 				<!-- Button overlay at bottom -->
@@ -708,21 +685,6 @@
 		pointer-events: auto; /* Re-enable pointer events for interactive elements */
 	}
 
-	/* Video overlay gradient */
-	.video-overlay-gradient {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: linear-gradient(
-			135deg,
-			rgba(0, 129, 167, 0.1) 0%,
-			rgba(0, 175, 181, 0.05) 50%,
-			rgba(240, 113, 103, 0.1) 100%
-		);
-		pointer-events: none;
-	}
 
 	/* Status bar over video */
 	.video-status-bar {
@@ -742,76 +704,6 @@
 		box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.3);
 	}
 
-	/* Logo overlay on video */
-	.video-logo-overlay {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 2rem;
-		text-align: center;
-		z-index: 8;
-	}
-
-	.logo-video {
-		width: 180px;
-		height: 180px;
-		background: rgba(255, 255, 255, 0.95);
-		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 2rem;
-		font-weight: 700;
-		color: var(--cerulean);
-		box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(20px);
-		border: 3px solid rgba(255, 255, 255, 0.3);
-		position: relative;
-		overflow: hidden;
-		animation: fadeIn 1s ease-out, logoFloat 4s ease-in-out infinite;
-	}
-
-	.logo-video::after {
-		content: "";
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.2) 100%);
-	}
-
-	.logo-image-video {
-		width: 180px;
-		height: 180px;
-		border-radius: 50%;
-		object-fit: cover;
-		box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(20px);
-		border: 3px solid rgba(255, 255, 255, 0.3);
-		animation: fadeIn 1s ease-out, logoFloat 4s ease-in-out infinite;
-	}
-
-	.welcome-text-video {
-		color: white;
-		font-size: 2.25rem;
-		font-weight: 700;
-		margin-bottom: 1rem;
-		text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
-		animation: fadeIn 1s ease-out 0.2s both;
-	}
-
-	.welcome-subtext-video {
-		color: rgba(255, 255, 255, 0.9);
-		font-size: 1.25rem;
-		margin-bottom: 3rem;
-		text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.7);
-		animation: fadeIn 1s ease-out 0.4s both;
-	}
 
 	/* Button overlay at bottom */
 	.video-button-overlay {
@@ -882,15 +774,6 @@
 			0 0 0 4px rgba(255, 255, 255, 0.1);
 	}
 
-	/* Additional animations for video overlay */
-	@keyframes logoFloat {
-		0%, 100% {
-			transform: translate(-50%, -50%) translateY(0);
-		}
-		50% {
-			transform: translate(-50%, -50%) translateY(-10px);
-		}
-	}
 
 	@keyframes buttonPulse {
 		0%, 100% {
@@ -907,23 +790,6 @@
 
 	/* Responsive adjustments for video overlay */
 	@media (min-width: 768px) and (min-height: 1024px) {
-		.welcome-text-video {
-			font-size: 2.5rem;
-		}
-		
-		.logo-video, .logo-image-video {
-			width: 200px;
-			height: 200px;
-		}
-
-		.logo-video {
-			font-size: 2.2rem;
-		}
-
-		.welcome-subtext-video {
-			font-size: 1.4rem;
-		}
-
 		.start-button-video {
 			padding: 2rem 5rem;
 			font-size: 1.75rem;
@@ -931,23 +797,6 @@
 	}
 
 	@media (min-width: 1080px) and (min-height: 1920px) {
-		.welcome-text-video {
-			font-size: 3rem;
-		}
-		
-		.logo-video, .logo-image-video {
-			width: 250px;
-			height: 250px;
-		}
-
-		.logo-video {
-			font-size: 2.5rem;
-		}
-
-		.welcome-subtext-video {
-			font-size: 1.6rem;
-		}
-
 		.start-button-video {
 			padding: 2.5rem 6rem;
 			font-size: 2rem;
@@ -960,23 +809,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.welcome-text-video {
-			font-size: 1.75rem;
-		}
-		
-		.logo-video, .logo-image-video {
-			width: 150px;
-			height: 150px;
-		}
-
-		.logo-video {
-			font-size: 1.5rem;
-		}
-
-		.welcome-subtext-video {
-			font-size: 1.125rem;
-		}
-
 		.start-button-video {
 			padding: 1.25rem 3rem;
 			font-size: 1.25rem;
@@ -988,23 +820,6 @@
 			padding: 0.75rem 1rem;
 		}
 		
-		.welcome-text-video {
-			font-size: 1.5rem;
-		}
-		
-		.logo-video, .logo-image-video {
-			width: 120px;
-			height: 120px;
-		}
-
-		.logo-video {
-			font-size: 1.25rem;
-		}
-
-		.welcome-subtext-video {
-			font-size: 1rem;
-		}
-
 		.start-button-video {
 			padding: 1.25rem 2rem;
 			font-size: 1.125rem;

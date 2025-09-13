@@ -115,6 +115,16 @@
 		}
 	}
 
+	// Reactive effect for video URL changes to ensure proper playback
+	$effect(() => {
+		if (videoElement && $currentVideoUrl && $isPlaying) {
+			console.log('Video URL changed to:', $currentVideoUrl);
+			// Ensure the new video plays when URL changes
+			videoElement.load(); // Reload the video element with new src
+			videoElement.play().catch(console.error);
+		}
+	});
+
 	// Reactive updates for dynamic styling
 	$effect(() => {
 		if ($visualSettings && typeof document !== 'undefined') {
@@ -146,7 +156,6 @@
 				src={$currentVideoUrl}
 				autoplay
 				muted={isMuted}
-				loop
 				onclick={handleVideoClick}
 				onended={handleVideoEnded}
 				onloadeddata={handleVideoLoad}

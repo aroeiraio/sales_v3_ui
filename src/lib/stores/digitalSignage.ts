@@ -91,7 +91,9 @@ export const digitalSignageActions = {
       const urls = digitalSignageService.getMediaUrls(
         digitalSignageService.filterValidItems(get(digitalSignageItems))
       );
-      return index + 1 < urls.length ? index + 1 : 0; // Loop back to start
+      const nextIndex = index + 1 < urls.length ? index + 1 : 0; // Loop back to start
+      console.log(`Digital signage: Moving from video ${index} to video ${nextIndex} (total: ${urls.length} videos)`);
+      return nextIndex;
     });
   },
 
@@ -105,6 +107,7 @@ export const digitalSignageActions = {
   },
 
   onVideoEnded(): void {
+    console.log('Digital signage: Video ended, moving to next video');
     this.nextVideo();
   },
 

@@ -1,4 +1,6 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+
   /**
    * @type {() => void}
    */
@@ -8,6 +10,47 @@
    * @type {() => void}
    */
   export let onCancel;
+
+  // Auto-redirect timeout variables
+  let autoRedirectTimer = 30;
+  let autoRedirectInterval = null;
+  let isUserInteracting = false;
+
+  onMount(() => {
+    // Start 30-second countdown for auto-redirect
+    startAutoRedirectCountdown();
+  });
+
+  onDestroy(() => {
+    clearAutoRedirectCountdown();
+  });
+
+  function startAutoRedirectCountdown() {
+    autoRedirectTimer = 30;
+    autoRedirectInterval = setInterval(() => {
+      autoRedirectTimer--;
+      
+      if (autoRedirectTimer <= 0) {
+        clearAutoRedirectCountdown();
+        // Auto-redirect to start screen (home page)
+        onClose();
+      }
+    }, 1000);
+  }
+
+  function clearAutoRedirectCountdown() {
+    if (autoRedirectInterval) {
+      clearInterval(autoRedirectInterval);
+      autoRedirectInterval = null;
+    }
+  }
+
+  function handleUserAction(callback) {
+    // Stop auto-redirect when user takes action
+    clearAutoRedirectCountdown();
+    isUserInteracting = true;
+    callback();
+  }
 </script>
 
 <section class="section payment-status active timeout-screen">
@@ -23,13 +66,47 @@
       Desculpe, houve uma falha no processamento do seu pagamento.
       O tempo limite foi excedido.
     </div>
+    
+    {#if !isUserInteracting}
+      <div class="auto-redirect-info">
+        <div class="countdown-container">
+          <div class="countdown-circle">
+            <svg class="countdown-svg" width="80" height="80" viewBox="0 0 80 80">
+              <circle 
+                cx="40" 
+                cy="40" 
+                r="35" 
+                stroke="var(--border)" 
+                stroke-width="6" 
+                fill="none"
+              />
+              <circle 
+                cx="40" 
+                cy="40" 
+                r="35" 
+                stroke="var(--destructive)" 
+                stroke-width="6" 
+                fill="none"
+                stroke-dasharray="219.9"
+                stroke-dashoffset={(1 - autoRedirectTimer / 30) * 219.9}
+                class="countdown-progress"
+              />
+            </svg>
+            <div class="countdown-text">{autoRedirectTimer}</div>
+          </div>
+        </div>
+        <p class="auto-redirect-message">
+          Retornando à tela inicial automaticamente em <strong>{autoRedirectTimer}s</strong>
+        </p>
+      </div>
+    {/if}
   </div>
 
   <div class="timeout-actions">
-    <button class="cart-style-checkout-button" onclick={onClose}>
+    <button class="cart-style-checkout-button" onclick={() => handleUserAction(onClose)}>
       Fechar
     </button>
-    <button class="cart-style-cancel-button" onclick={onCancel}>
+    <button class="cart-style-cancel-button" onclick={() => handleUserAction(onCancel)}>
       Cancelar
     </button>
   </div>
@@ -179,6 +256,62 @@
 
   .payment-status.active {
     display: block;
+  }
+
+  /* Auto-redirect countdown styles */
+  .auto-redirect-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--muted);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--border);
+  }
+
+  .countdown-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .countdown-circle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .countdown-svg {
+    transform: rotate(-90deg);
+  }
+
+  .countdown-progress {
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  .countdown-text {
+    position: absolute;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--destructive);
+  }
+
+  .auto-redirect-message {
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    text-align: center;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .auto-redirect-message strong {
+    color: var(--destructive);
+    font-weight: 700;
   }
 
   @keyframes timeout-shake {

@@ -137,7 +137,7 @@ class PaymentService {
         console.error('Error canceling payment:', error);
         this.setState('payment_timeout');
       }
-    }, 30000); // 30 seconds - only for QR code generation timeout
+    }, 30000); // 30 seconds - only for PIX QR code generation timeout (not for card payments)
   }
 
   private clearWaitTimeout() {
@@ -322,9 +322,13 @@ class PaymentService {
     
     switch (status.action) {
       case 'WAIT':
-        // For PIX, WAIT state is handled in processing - just continue waiting for SHOW_QRCODE
-        // Start 30-second timeout for QR code generation (if SHOW_QRCODE doesn't come)
-        this.startWaitTimeout();
+        // Only start PIX timeout for PIX payments (MERCADOPAGO broker)
+        // Card payments use MERCADOPAGO_PINPAD and should not have this timeout
+        if (status.broker === 'MERCADOPAGO') {
+          // For PIX, WAIT state is handled in processing - just continue waiting for SHOW_QRCODE
+          // Start 30-second timeout for QR code generation (if SHOW_QRCODE doesn't come)
+          this.startWaitTimeout();
+        }
         break;
       
       case 'SHOW_QRCODE':

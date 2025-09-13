@@ -1,4 +1,6 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+
   /**
    * @type {'failed' | 'retry'}
    */
@@ -28,6 +30,56 @@
    * @type {() => void}
    */
   export let onReturn;
+
+  // Auto-redirect timeout variables
+  let autoRedirectTimer = 60;
+  let autoRedirectInterval = null;
+  let isUserInteracting = false;
+
+  onMount(() => {
+    // Only start timeout for retry state (not failed state which has 3s delay)
+    if (paymentState === 'retry') {
+      startAutoRedirectCountdown();
+    }
+  });
+
+  onDestroy(() => {
+    clearAutoRedirectCountdown();
+  });
+
+  // Watch paymentState changes to start/stop timer
+  $: if (paymentState === 'retry' && !autoRedirectInterval) {
+    startAutoRedirectCountdown();
+  } else if (paymentState === 'failed') {
+    clearAutoRedirectCountdown();
+  }
+
+  function startAutoRedirectCountdown() {
+    autoRedirectTimer = 60;
+    autoRedirectInterval = setInterval(() => {
+      autoRedirectTimer--;
+      
+      if (autoRedirectTimer <= 0) {
+        clearAutoRedirectCountdown();
+        // Auto-redirect to start screen (home page)
+        onReturn();
+      }
+    }, 1000);
+  }
+
+  function clearAutoRedirectCountdown() {
+    if (autoRedirectInterval) {
+      clearInterval(autoRedirectInterval);
+      autoRedirectInterval = null;
+    }
+  }
+
+  function handleUserAction(callback) {
+    // Stop auto-redirect when user takes action
+    clearAutoRedirectCountdown();
+    isUserInteracting = true;
+    callback();
+  }
 </script>
 
 <section class="section payment-status active error-state">
@@ -42,20 +94,54 @@
     <div class="status-description">
       Seu pagamento foi recusado. Verifique os dados do cartão ou tente outro método de pagamento.
     </div>
+    
+    {#if paymentState === 'retry' && !isUserInteracting && autoRedirectInterval}
+      <div class="auto-redirect-info">
+        <div class="countdown-container">
+          <div class="countdown-circle">
+            <svg class="countdown-svg" width="60" height="60" viewBox="0 0 60 60">
+              <circle 
+                cx="30" 
+                cy="30" 
+                r="25" 
+                stroke="var(--border)" 
+                stroke-width="4" 
+                fill="none"
+              />
+              <circle 
+                cx="30" 
+                cy="30" 
+                r="25" 
+                stroke="var(--destructive)" 
+                stroke-width="4" 
+                fill="none"
+                stroke-dasharray="157.08"
+                stroke-dashoffset={(1 - autoRedirectTimer / 60) * 157.08}
+                class="countdown-progress"
+              />
+            </svg>
+            <div class="countdown-text">{autoRedirectTimer}</div>
+          </div>
+        </div>
+        <p class="auto-redirect-message">
+          Retornando à tela inicial automaticamente em <strong>{autoRedirectTimer}s</strong>
+        </p>
+      </div>
+    {/if}
   </div>
   
   {#if paymentState === 'retry' && retryCount < maxRetries}
     <div class="retry-options">
-      <button class="cart-style-checkout-button" onclick={onRetry}>
+      <button class="cart-style-checkout-button" onclick={() => handleUserAction(onRetry)}>
         Tentar Novamente
       </button>
-      <button class="cart-style-cancel-button" onclick={onCancel}>
+      <button class="cart-style-cancel-button" onclick={() => handleUserAction(onCancel)}>
         Cancelar
       </button>
     </div>
   {:else}
     <div class="final-options">
-      <button class="return-button" onclick={onReturn}>
+      <button class="return-button" onclick={() => handleUserAction(onReturn)}>
         Voltar ao Início
       </button>
       <p class="retry-exceeded">Limite de tentativas excedido. Tente novamente mais tarde.</p>
@@ -233,6 +319,65 @@
 
   .payment-status.active {
     display: block;
+  }
+
+  /* Auto-redirect countdown styles */
+  .auto-redirect-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--muted);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .countdown-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .countdown-circle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .countdown-svg {
+    transform: rotate(-90deg);
+  }
+
+  .countdown-progress {
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  .countdown-text {
+    position: absolute;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--destructive);
+  }
+
+  .auto-redirect-message {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-align: center;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .auto-redirect-message strong {
+    color: var(--destructive);
+    font-weight: 700;
   }
 
   @keyframes error-shake {

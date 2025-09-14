@@ -1,4 +1,7 @@
 <script lang="ts">
+  // WARNING: This VideoPlayer component is for specific video playback scenarios
+  // For main page digital signage, use the video element in +page.svelte instead
+  // This component only handles play/pause, NOT navigation to products
   import { onMount, onDestroy } from 'svelte';
   import { videoPlayerService } from '../../services/videoPlayer';
   import { Play, Pause, SkipForward, SkipBack, RotateCcw } from 'lucide-svelte';
@@ -50,18 +53,29 @@
   });
 
   async function handleVideoClick() {
+    console.log('=== VIDEO PLAYER COMPONENT CLICK HANDLER ===');
+    console.log('VideoPlayer: Video clicked, current state:', { 
+      isPlaying: playerState.isPlaying,
+      hasError: playerState.hasError,
+      isLoading: playerState.isLoading,
+      currentVideo: playerState.currentVideo?.title
+    });
+    
     if (playerState.isPlaying) {
+      console.log('VideoPlayer: Pausing video');
       videoPlayerService.pause();
     } else {
       try {
+        console.log('VideoPlayer: Starting video playback');
         await videoPlayerService.play();
         // Start auto-play after first user interaction
         if (!videoPlayerService.isAutoPlayStarted) {
           videoPlayerService.startAutoPlay();
           videoPlayerService.isAutoPlayStarted = true;
+          console.log('VideoPlayer: Auto-play started');
         }
       } catch (error) {
-        console.error('Failed to play video:', error);
+        console.error('VideoPlayer: Failed to play video:', error);
       }
     }
   }

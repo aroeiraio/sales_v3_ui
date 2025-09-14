@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { ShoppingCart } from 'lucide-svelte';
 	import { 
 		visualSettings, 
@@ -66,6 +66,21 @@
 		};
 	});
 
+	// Cleanup any pending video play promises on component destruction
+	onDestroy(() => {
+		if (currentPlayPromise) {
+			currentPlayPromise.catch(() => {
+				// Ignore any errors from cancelled promises
+			});
+			currentPlayPromise = null;
+		}
+		
+		if (playbackDebounceTimer) {
+			clearTimeout(playbackDebounceTimer);
+			playbackDebounceTimer = null;
+		}
+	});
+
 	async function startShopping() {
 		try {
 			console.log('Starting shopping - checking system status first');
@@ -98,6 +113,8 @@
 	}
 
 	async function handleVideoClick() {
+		console.log('=== MAIN PAGE VIDEO CLICK HANDLER ===');
+		console.log('Main page: Video clicked, calling digitalSignageActions.onVideoClick()');
 		await digitalSignageActions.onVideoClick();
 	}
 
@@ -107,19 +124,82 @@
 
 
 	function handleVideoLoad() {
-		if (videoElement) {
+		if (videoElement && videoElement.isConnected) {
+			console.log('Video loaded and ready for playback');
 			videoElement.muted = isMuted;
-			videoElement.play().catch(console.error);
+			
+			// Video is ready, attempt to play
+			if ($isPlaying) {
+				scheduleVideoPlay();
+			}
 		}
+	}
+
+	// Track current play promise and loading state
+	let currentPlayPromise: Promise<void> | null = null;
+	let playbackDebounceTimer: number | null = null;
+	let lastVideoUrl: string | null = null;
+
+	// Function to safely attempt video playback with proper error handling
+	async function attemptVideoPlay() {
+		if (!videoElement || !videoElement.isConnected || !$isPlaying || !$currentVideoUrl) {
+			return;
+		}
+
+		// Cancel any pending play promise
+		if (currentPlayPromise) {
+			currentPlayPromise.catch(() => {
+				// Ignore AbortError from cancelled promises
+			});
+			currentPlayPromise = null;
+		}
+
+		try {
+			console.log('Attempting video play for:', $currentVideoUrl);
+			currentPlayPromise = videoElement.play();
+			await currentPlayPromise;
+			console.log('Video playback started successfully');
+		} catch (error) {
+			if (error.name === 'AbortError') {
+				console.log('Video play aborted (expected during source changes)');
+			} else {
+				console.error('Video play error:', error);
+			}
+		}
+	}
+
+	// Debounced function to handle video URL changes
+	function scheduleVideoPlay() {
+		if (playbackDebounceTimer) {
+			clearTimeout(playbackDebounceTimer);
+		}
+		
+		playbackDebounceTimer = setTimeout(() => {
+			attemptVideoPlay();
+		}, 50); // Small debounce to avoid rapid fire calls
 	}
 
 	// Reactive effect for video URL changes to ensure proper playback
 	$effect(() => {
 		if (videoElement && $currentVideoUrl && $isPlaying) {
-			console.log('Video URL changed to:', $currentVideoUrl);
-			// Ensure the new video plays when URL changes
-			videoElement.load(); // Reload the video element with new src
-			videoElement.play().catch(console.error);
+			// Only reload and schedule play if URL actually changed
+			if (lastVideoUrl !== $currentVideoUrl) {
+				console.log('Video URL changed from', lastVideoUrl, 'to:', $currentVideoUrl);
+				lastVideoUrl = $currentVideoUrl;
+				
+				// Check if video element is still connected to DOM
+				if (!videoElement.isConnected) {
+					console.warn('Video element not connected to DOM, skipping load/play');
+					return;
+				}
+				
+				// Load the new video source
+				videoElement.load();
+				// Wait for loadeddata event before attempting to play
+			} else {
+				// Same URL, just attempt to play if needed
+				scheduleVideoPlay();
+			}
 		}
 	});
 

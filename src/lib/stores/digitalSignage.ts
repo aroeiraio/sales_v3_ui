@@ -19,6 +19,10 @@ export const isFullscreen = writable<boolean>(false);
 // Store for last fetch timestamp
 export const digitalSignageLastFetch = writable<Date | null>(null);
 
+// Store for click debouncing
+let isProcessingClick = false;
+const CLICK_DEBOUNCE_TIME = 1000; // 1 second
+
 // Derived stores for computed values
 export const validItems = derived(
   digitalSignageItems,
@@ -94,14 +98,6 @@ export const digitalSignageActions = {
       const nextIndex = index + 1 < urls.length ? index + 1 : 0; // Loop back to start
       console.log(`Digital signage: Moving from video ${index} to video ${nextIndex} (total: ${urls.length} videos)`);
       
-      // If we're looping back to the start (reached end of playlist), refresh data
-      if (nextIndex === 0 && index + 1 >= urls.length) {
-        console.log('Digital signage: End of playlist reached, refreshing digital signage data');
-        this.refreshSignageData().catch(error => {
-          console.error('Failed to refresh digital signage data after playlist end:', error);
-        });
-      }
-      
       return nextIndex;
     });
   },
@@ -117,39 +113,69 @@ export const digitalSignageActions = {
 
   onVideoEnded(): void {
     console.log('Digital signage: Video ended, moving to next video');
-    
-    // Check if we only have one video (single video playlist)
-    const urls = digitalSignageService.getMediaUrls(
-      digitalSignageService.filterValidItems(get(digitalSignageItems))
-    );
-    
-    if (urls.length === 1) {
-      console.log('Digital signage: Single video playlist detected, refreshing data after video end');
-      this.refreshSignageData().catch(error => {
-        console.error('Failed to refresh digital signage data after single video end:', error);
-      });
-    }
-    
     this.nextVideo();
   },
 
   async onVideoClick(): Promise<void> {
-    // Stop playback and start session before redirecting to products
+    console.log('=== VIDEO CLICK HANDLER TRIGGERED ===');
+    
+    // Debounce multiple rapid clicks
+    if (isProcessingClick) {
+      console.log('Digital signage: Click already being processed, ignoring duplicate click');
+      return;
+    }
+    
+    isProcessingClick = true;
+    console.log('Digital signage: Processing video click...');
+    
+    // Reset debounce flag after timeout
+    setTimeout(() => {
+      isProcessingClick = false;
+      console.log('Digital signage: Click debounce reset');
+    }, CLICK_DEBOUNCE_TIME);
+    
+    // Stop playback first
+    console.log('Digital signage: Stopping video playback');
     this.stopPlayback();
     
     if (typeof window !== 'undefined') {
       try {
+        console.log('Digital signage: Starting session service...');
         // Import session service dynamically to avoid circular dependencies
         const { sessionService } = await import('../services/session');
-        console.log('Video clicked - starting session');
+        
+        console.log('Digital signage: Session service imported, starting session...');
         await sessionService.startSession();
-        console.log('Session started from video click, navigating to products');
+        
+        console.log('Digital signage: Session started successfully, navigating to products');
         window.location.href = '/products';
       } catch (error) {
-        console.error('Error starting session from video click:', error);
-        // Still redirect even if session fails
-        window.location.href = '/products';
+        console.error('Digital signage: CRITICAL ERROR starting session from video click:', error);
+        console.error('Digital signage: Error details:', {
+          name: error?.name,
+          message: error?.message,
+          stack: error?.stack
+        });
+        
+        // Add a delay and retry mechanism
+        console.log('Digital signage: Attempting fallback navigation after error...');
+        try {
+          // Try to navigate anyway, but with a small delay to ensure cleanup
+          setTimeout(() => {
+            console.log('Digital signage: Fallback navigation to products');
+            window.location.href = '/products';
+          }, 500);
+        } catch (fallbackError) {
+          console.error('Digital signage: Even fallback navigation failed:', fallbackError);
+          // Last resort: reload the page to reset state
+          setTimeout(() => {
+            console.log('Digital signage: Last resort - reloading page');
+            window.location.reload();
+          }, 1000);
+        }
       }
+    } else {
+      console.warn('Digital signage: Window object not available, cannot navigate');
     }
   },
 
@@ -193,6 +219,5 @@ export const digitalSignageActions = {
   }
 };
 
-// Note: Digital signage now refreshes after each complete playlist cycle
-// instead of using a timer-based approach. The refresh happens in nextVideo()
-// when looping back to the first video after reaching the end of the playlist.
+// Note: Digital signage videos loop continuously. When the last video finishes,
+// playback automatically returns to the first video in the playlist.

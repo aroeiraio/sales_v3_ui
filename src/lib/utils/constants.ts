@@ -35,6 +35,7 @@ export const ENDPOINTS = {
   cart: '/cart',
   checkout: '/checkout',
   payment: '/payment',
+  delivery: '/sales/v1/delivery',
   media: '/media' // Media endpoint
 } as const;
 

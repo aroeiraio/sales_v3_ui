@@ -3,6 +3,7 @@ import { ENDPOINTS } from '../utils/constants';
 import { errorDialogService } from './errorDialog';
 import { cartService } from './cart';
 import { sessionService } from './session';
+import { paymentNavigationService } from './paymentNavigation';
 
 export interface PaymentMethod {
   id: string;
@@ -45,12 +46,12 @@ export interface PaymentResponse {
 
 // PoS Payment API Types
 export interface PosPaymentRequest {
-  broker: 'MERCADOPAGO_PINPAD' | 'MERCADOPAGO';
+  broker: 'MERCADOPAGO_PINPAD' | 'MERCADOPAGO' | 'TEST_PAYMENT';
   method: 'credit' | 'debit' | 'mercadopago' | 'pix';
 }
 
 export interface PosPaymentStatus {
-  action: 'WAIT' | 'INSERT_TAP_CARD' | 'RELEASE' | 'SHOW_RETRY';
+  action: 'WAIT' | 'INSERT_TAP_CARD' | 'RELEASE' | 'SHOW_RETRY' | 'SHOW_QRCODE';
   status: 'idle' | 'PAYMENT_APPROVED' | 'PAYMENT_REFUSED' | string;
   broker: string;
   session: string;
@@ -59,6 +60,7 @@ export interface PosPaymentStatus {
   read: boolean;
   transactionId?: string;
   amount?: number;
+  qrcode_source?: string;
 }
 
 export type PaymentState = 
@@ -97,11 +99,12 @@ class PaymentService {
     }
   ];
 
-  private pollingInterval: NodeJS.Timeout | null = null;
+  private pollingInterval: number | null = null;
   private currentState: PaymentState = 'idle';
-  private stateChangeCallback: ((state: PaymentState, data?: any) => void) | null = null;
-  private waitTimeoutId: NodeJS.Timeout | null = null;
+  private waitTimeoutId: number | null = null;
   private waitStartTime: number | null = null;
+  private currentPaymentMethod = '';
+  // Status retry mechanism removed
 
   getPaymentMethods(): PaymentMethod[] {
     return this.paymentMethods;
@@ -112,43 +115,72 @@ class PaymentService {
   }
 
   onStateChange(callback: (state: PaymentState, data?: any) => void) {
-    this.stateChangeCallback = callback;
+    console.warn('PaymentService: onStateChange is deprecated. Use route-based navigation instead.');
+    // Keep for backward compatibility but don't store callback
   }
 
   private setState(newState: PaymentState, data?: any) {
-    this.currentState = newState;
-    if (this.stateChangeCallback) {
-      this.stateChangeCallback(newState, data);
+    // Prevent rapid repeated state changes to the same state
+    if (this.currentState === newState) {
+      console.log(`Payment service: Ignoring duplicate state change to '${newState}'`);
+      return;
     }
+    
+    console.log(`Payment service: State change from '${this.currentState}' to '${newState}'`);
+    console.log(`Payment service: State change data:`, data);
+    console.log(`Payment service: Current payment method:`, this.currentPaymentMethod);
+    this.currentState = newState;
+    
+    // Use navigation service for route-based navigation
+    console.log(`Payment service: Calling navigation service with state: ${newState}`);
+    paymentNavigationService.navigateToState(newState, data, this.currentPaymentMethod);
+    console.log(`Payment service: Navigation service called`);
   }
 
   private startWaitTimeout() {
+    // Clear any existing timeout first
+    this.clearWaitTimeout();
+    
     this.waitStartTime = Date.now();
+    console.log('Starting 20-second QR code generation timeout');
     this.waitTimeoutId = setTimeout(async () => {
-      console.log('PIX payment QR code generation timeout reached (30s), canceling payment');
+      console.log('PIX payment QR code generation timeout reached (20s), showing payment failure');
       try {
         // Cancel the payment
         await fetch('http://localhost:8090/interface/payment', {
           method: 'DELETE'
         });
         this.stopPolling();
-        this.setState('payment_timeout');
+        this.setState('failed', { error: 'QR code generation timeout - payment failed' });
       } catch (error) {
         console.error('Error canceling payment:', error);
-        this.setState('payment_timeout');
+        this.stopPolling();
+        this.setState('failed', { error: 'QR code generation timeout - payment failed' });
       }
-    }, 30000); // 30 seconds - only for PIX QR code generation timeout (not for card payments)
+    }, 20000); // 20 seconds - QR code generation timeout
   }
 
-  private clearWaitTimeout() {
+  clearWaitTimeout() {
     if (this.waitTimeoutId) {
+      console.log('Clearing 20-second QR code generation timeout');
       clearTimeout(this.waitTimeoutId);
       this.waitTimeoutId = null;
       this.waitStartTime = null;
     }
   }
 
+  private isCancellingPayment: boolean = false;
+  private isResettingPayment: boolean = false;
+
   async cancelPayment(): Promise<void> {
+    // Prevent multiple simultaneous DELETE requests
+    if (this.isCancellingPayment) {
+      console.log('Payment cancellation already in progress, ignoring duplicate request');
+      return;
+    }
+
+    this.isCancellingPayment = true;
+    
     try {
       await fetch('http://localhost:8090/interface/payment', {
         method: 'DELETE'
@@ -156,48 +188,21 @@ class PaymentService {
       console.log('Payment canceled successfully');
     } catch (error) {
       console.error('Error canceling payment:', error);
+    } finally {
+      this.isCancellingPayment = false;
     }
   }
 
   async processPayment(paymentMethod: string): Promise<PaymentResponse> {
     try {
+      // Store current payment method for navigation
+      this.currentPaymentMethod = paymentMethod;
       this.setState('processing');
       
-      // Check if cart has items (cart is required for both session and checkout flows)
-      const cartItems = cartService.getCartItems();
-      const cartTotal = cartService.getCartTotal();
-      
-      console.log('Payment service cart check:', {
-        cartItems: cartItems,
-        cartItemsLength: cartItems?.length || 0,
-        cartTotal: cartTotal,
-        hasCartItems: !!(cartItems && cartItems.length > 0)
-      });
-      
-      if (!cartItems || cartItems.length === 0) {
-        console.error('Payment failed: Cart appears to be empty', {
-          cartItems,
-          cartTotal,
-          cartItemsType: typeof cartItems,
-          cartItemsArray: Array.isArray(cartItems)
-        });
-        throw new Error('Cart is empty');
-      }
-      
-      // Build cart object for logging and processing
-      const cart = {
-        items: cartItems,
-        total: cartTotal,
-        subtotal: cartTotal, // Simplified for now
-        serviceFee: 0,
-        discount: 0
-      };
-
       // Session is optional - checkout flow doesn't require sessions
       const session = sessionService.getSession();
       console.log('Payment processing:', {
         hasSession: session?.isActive,
-        cartTotal: cart.total,
         paymentMethod: paymentMethod
       });
       
@@ -212,7 +217,6 @@ class PaymentService {
       });
       console.log('Starting payment with:', posRequest);
       console.log('Session ID:', session?.sessionId || 'No session (checkout flow)');
-      console.log('Cart total:', cart.total);
       
       // Start payment with PoS API
       const response = await fetch('http://localhost:8090/interface/payment', {
@@ -238,12 +242,12 @@ class PaymentService {
       const paymentData = await response.json();
       console.log('Payment data received:', paymentData);
       
-      // Wait 2 seconds before starting status polling
-      console.log('Waiting 2 seconds before starting polling...');
+      // Wait 3 seconds before starting status polling
+      console.log('Waiting 3 seconds before starting polling...');
       setTimeout(() => {
         console.log('Starting status polling...');
         this.startStatusPolling();
-      }, 2000);
+      }, 3000);
       
       return {
         transactionId: paymentData.transactionId || paymentData.id || `pos-${Date.now()}`,
@@ -253,7 +257,7 @@ class PaymentService {
 
     } catch (error) {
       console.error('Payment processing failed:', error);
-      this.setState('failed', { error: error.message });
+      this.setState('failed', { error: error instanceof Error ? error.message : 'Unknown error' });
       
       throw new Error('Failed to start payment process');
     }
@@ -275,6 +279,8 @@ class PaymentService {
         return { broker: 'TEST_PAYMENT', method: 'credit' };
       } else if (broker === 'TEST_PAYMENT' && method === 'debit') {
         return { broker: 'TEST_PAYMENT', method: 'debit' };
+      } else if (broker === 'TEST_PAYMENT' && method === 'pix') {
+        return { broker: 'TEST_PAYMENT', method: 'pix' };
       } else {
         throw new Error(`Unsupported payment method combination: ${broker}-${method}`);
       }
@@ -294,12 +300,26 @@ class PaymentService {
   }
 
   private async startStatusPolling() {
+    // Don't start polling if we're already in success state
+    if (this.currentState === 'success') {
+      console.log('Payment service: Not starting polling - already in success state');
+      return;
+    }
+
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
 
+    console.log('Payment service: Starting status polling');
     this.pollingInterval = setInterval(async () => {
       try {
+        // Stop polling if we're in success state
+        if (this.currentState === 'success') {
+          console.log('Payment service: Stopping polling - success state detected');
+          this.stopPolling();
+          return;
+        }
+
         const response = await fetch('http://localhost:8090/interface/payment/status');
         
         if (!response.ok) {
@@ -311,27 +331,45 @@ class PaymentService {
 
       } catch (error) {
         console.error('Status polling failed:', error);
-        this.stopPolling();
-        this.setState('failed', { error: 'Connection lost during payment' });
+        // No retry mechanism - just log the error and continue
       }
     }, 1000); // Poll every second
   }
 
   private handleStatusUpdate(status: PosPaymentStatus) {
     console.log('Payment status update:', status);
+    console.log('Current payment method:', this.currentPaymentMethod);
+    console.log('Status broker:', status.broker);
+    console.log('Status action:', status.action);
+    console.log('Status status:', status.status);
     
     switch (status.action) {
       case 'WAIT':
-        // Only start PIX timeout for PIX payments (MERCADOPAGO broker)
-        // Card payments use MERCADOPAGO_PINPAD and should not have this timeout
-        if (status.broker === 'MERCADOPAGO') {
+        console.log('WAIT state received for broker:', status.broker);
+        console.log('Current payment method:', this.currentPaymentMethod);
+        
+        // Check if this is a PIX payment based on the payment method, not just broker
+        const isPixPayment = this.currentPaymentMethod && (
+          this.currentPaymentMethod.includes('pix') || 
+          this.currentPaymentMethod.includes('MERCADOPAGO-pix') ||
+          this.currentPaymentMethod === 'pix'
+        );
+        
+        if (isPixPayment && this.currentState !== 'show_qrcode') {
+          console.log('PIX payment in WAIT state - starting QR code generation timeout');
           // For PIX, WAIT state is handled in processing - just continue waiting for SHOW_QRCODE
           // Start 30-second timeout for QR code generation (if SHOW_QRCODE doesn't come)
           this.startWaitTimeout();
+        } else if (!isPixPayment && (status.broker === 'TEST_PAYMENT' || status.broker === 'MERCADOPAGO_PINPAD')) {
+          console.log(`${status.broker} in WAIT state - navigating to card instructions`);
+          // For card payments (TEST_PAYMENT or MERCADOPAGO_PINPAD), WAIT state means ready for card interaction
+          // Navigate to card instructions page
+          this.setState('insert_tap_card');
         }
         break;
       
       case 'SHOW_QRCODE':
+        console.log('QR code ready, clearing generation timeout and starting user payment timer');
         // Clear timeout since QR code is ready
         this.clearWaitTimeout();
         this.setState('show_qrcode', {
@@ -342,12 +380,22 @@ class PaymentService {
         break;
       
       case 'INSERT_TAP_CARD':
+        console.log('INSERT_TAP_CARD action received - navigating to card instructions');
+        console.log('INSERT_TAP_CARD: Current state before setState:', this.currentState);
+        console.log('INSERT_TAP_CARD: Current payment method:', this.currentPaymentMethod);
+        console.log('INSERT_TAP_CARD: Broker:', status.broker);
+        console.log('INSERT_TAP_CARD: Full status object:', status);
+        
+        // INSERT_TAP_CARD always means navigate to card instructions
+        // Keep polling active to monitor for payment completion/failure
         this.setState('insert_tap_card');
+        console.log('INSERT_TAP_CARD: setState called, new state should be insert_tap_card');
         break;
       
       case 'RELEASE':
         // Handle successful payment - status field contains the payment result
         if (status.status === 'PAYMENT_APPROVED') {
+          console.log('Payment approved - stopping polling and transitioning to success state');
           this.stopPolling();
           this.setState('success', {
             transactionId: status.transactionId,
@@ -358,6 +406,8 @@ class PaymentService {
             console.warn('Cart clearing failed after successful payment:', error);
             // Don't show error dialog for cart clearing failures after successful payment
           });
+        } else {
+          console.log('RELEASE case without PAYMENT_APPROVED status:', status);
         }
         break;
       
@@ -365,30 +415,79 @@ class PaymentService {
         // Handle payment refusal - status field contains the payment result
         if (status.status === 'PAYMENT_REFUSED') {
           this.stopPolling();
+          paymentNavigationService.handleRetry();
           this.setState('retry', {
-            canRetry: true,
+            canRetry: paymentNavigationService.getRetryStatus().canRetry,
             message: 'Payment was refused, you can try again'
           });
         }
+        break;
+      
+      default:
+        console.log('Unknown status action:', status.action);
+        console.log('Status data:', status);
+        // Don't change state for unknown actions, just log them
         break;
     }
   }
 
   stopPolling() {
+    console.log('Payment service: stopPolling called', {
+      hasPollingInterval: !!this.pollingInterval,
+      currentState: this.currentState
+    });
+    
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
+      console.log('Payment service: Polling stopped successfully');
+    } else {
+      console.log('Payment service: No polling interval to stop');
     }
   }
 
   resetPayment() {
-    this.stopPolling();
-    this.clearWaitTimeout();
-    this.setState('idle');
+    // Prevent multiple simultaneous reset calls
+    if (this.isResettingPayment) {
+      console.log('Payment reset already in progress, ignoring duplicate request');
+      return;
+    }
+    
+    this.isResettingPayment = true;
+    
+    try {
+      console.log('Payment service: Resetting payment state');
+      this.stopPolling();
+      this.clearWaitTimeout();
+      this.currentPaymentMethod = '';
+      // Status retry mechanism removed
+      paymentNavigationService.resetRetryCount();
+      this.setState('idle');
+    } finally {
+      // Use setTimeout to prevent immediate subsequent calls
+      setTimeout(() => {
+        this.isResettingPayment = false;
+      }, 100);
+    }
   }
 
   retryPayment() {
+    paymentNavigationService.resetRetryCount();
     this.setState('idle');
+  }
+
+  /**
+   * Get current payment method
+   */
+  getCurrentPaymentMethod(): string {
+    return this.currentPaymentMethod;
+  }
+
+  /**
+   * Get retry status from navigation service
+   */
+  getRetryStatus() {
+    return paymentNavigationService.getRetryStatus();
   }
 
   getPaymentMethodById(id: string): PaymentMethod | undefined {

@@ -1,4 +1,3 @@
-import { get } from '../utils/api';
 import { ENDPOINTS } from '../utils/constants';
 
 export interface DeliveryStatus {
@@ -16,14 +15,22 @@ export interface DeliveryStep {
 }
 
 class DeliveryService {
-  private pollingInterval: NodeJS.Timeout | null = null;
+  private pollingInterval: number | null = null;
   private currentStatus: DeliveryStatus | null = null;
   
   async getDeliveryStatus(): Promise<DeliveryStatus> {
     try {
-      const response = await get<DeliveryStatus>('/delivery');
-      this.currentStatus = response;
-      return response;
+      console.log('Consulting delivery endpoint: http://localhost:8090/sales/v1/delivery');
+      const response = await fetch('http://localhost:8090/sales/v1/delivery');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      this.currentStatus = data;
+      console.log('Delivery status response:', data);
+      return data;
     } catch (error) {
       console.error('Failed to get delivery status:', error);
       // Return mock status for development
@@ -36,19 +43,24 @@ class DeliveryService {
   }
 
   startPolling(callback: (status: DeliveryStatus) => void, intervalMs: number = 2000): void {
+    console.log('Delivery service: Starting polling with interval:', intervalMs);
     this.stopPolling();
     
     this.pollingInterval = setInterval(async () => {
       try {
+        console.log('Delivery service: Polling interval tick');
         const status = await this.getDeliveryStatus();
         callback(status);
       } catch (error) {
-        console.error('Polling error:', error);
+        console.error('Delivery service: Polling error:', error);
       }
     }, intervalMs);
 
     // Initial call
-    this.getDeliveryStatus().then(callback);
+    console.log('Delivery service: Making initial delivery status call');
+    this.getDeliveryStatus().then(callback).catch(error => {
+      console.error('Delivery service: Initial call error:', error);
+    });
   }
 
   stopPolling(): void {

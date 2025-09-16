@@ -1,81 +1,11 @@
-<script>
-  import { onMount, onDestroy } from 'svelte';
+<script lang="ts">
+  export let paymentResult: any = null;
+  export let cart: { total: number };
+  export let countdown: number = 60;
+  export let onShowInstructions: () => void;
+  export let onCancel: () => void;
 
-  /**
-   * @type {any}
-   */
-  export let paymentResult = null;
-
-  /**
-   * @type {any}
-   */
-  export let cart = { total: 0 };
-
-  /**
-   * @type {number}
-   */
-  export let initialCountdown = 60;
-
-  /**
-   * @type {() => void}
-   */
-  export let onShowInstructions;
-
-  /**
-   * @type {() => void}
-   */
-  export let onCancel;
-
-  /**
-   * @type {() => void}
-   */
-  export let onTimeout;
-
-  // Internal countdown state - this will be reactive
-  let countdownTimer = 60;
-  let countdownInterval = null;
-
-  // Start countdown when component mounts
-  onMount(() => {
-    countdownTimer = initialCountdown || 60;
-    startCountdown();
-  });
-
-  // Cleanup interval when component is destroyed
-  onDestroy(() => {
-    clearCountdown();
-  });
-
-
-  function startCountdown() {
-    clearCountdown(); // Clear any existing interval
-    
-    countdownInterval = setInterval(() => {
-      // Force reactivity by using function update
-      countdownTimer = Math.max(0, countdownTimer - 1);
-      
-      if (countdownTimer <= 0) {
-        clearCountdown();
-        if (onTimeout) {
-          onTimeout();
-        }
-      }
-    }, 1000);
-  }
-
-  function clearCountdown() {
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-    }
-  }
-
-  /**
-   * Format price for display
-   * @param {number} price
-   * @returns {string}
-   */
-  function formatPrice(price) {
+  function formatPrice(price: number): string {
     if (typeof price !== 'number' || isNaN(price)) {
       return 'R$ 0,00';
     }
@@ -86,7 +16,7 @@
   }
 </script>
 
-<section class="section payment-status active qr-code-screen">
+<section class="pix-display">
   <div class="qr-header">
     <div class="status-message">Escaneie o QR Code</div>
     <div class="status-description">Use seu celular para escanear o código PIX</div>
@@ -134,10 +64,10 @@
               fill="none"
               class="countdown-progress"
               stroke-dasharray="157"
-              stroke-dashoffset={157 - (countdownTimer / 60) * 157}
+              stroke-dashoffset={157 - (countdown / 60) * 157}
             />
           </svg>
-          <div class="countdown-text">{countdownTimer}s</div>
+          <div class="countdown-text">{countdown}s</div>
         </div>
       </div>
     </div>
@@ -149,36 +79,31 @@
       Complete o pagamento antes que o tempo expire
     </p>
     
-    <button class="instructions-button" onclick={onShowInstructions}>
+    <button class="instructions-button" on:click={onShowInstructions}>
       Como pagar
     </button>
     
-    <button class="cart-style-cancel-button" onclick={onCancel}>
+    <button class="cancel-button" on:click={onCancel}>
       Cancelar
     </button>
   </div>
 </section>
 
 <style>
-  .section {
+  .pix-display {
     background: var(--card);
     border-radius: var(--radius-lg);
     padding: 2rem;
     border: 1px solid var(--border);
-  }
-
-  /* QR Code Screen Styles */
-  .qr-code-screen {
     width: 100%;
     max-width: 600px;
     margin: 0 auto;
-    padding: 2rem;
     display: flex;
     flex-direction: column;
     gap: 2rem;
     text-align: center;
     height: fit-content;
-    max-height: calc(100vh - 160px);
+    max-height: 100vh;
     overflow-y: auto;
     box-shadow: var(--shadow-lg);
   }
@@ -210,18 +135,6 @@
     margin: 0;
   }
 
-  .amount-timer-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    gap: 2rem;
-    background: var(--background);
-    padding: 1.5rem;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border);
-  }
-
   .qr-code-display {
     position: relative;
     display: flex;
@@ -234,6 +147,18 @@
     border-radius: var(--radius-lg);
     padding: 1.5rem;
     box-shadow: var(--shadow-md);
+  }
+
+  .amount-timer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 2rem;
+    background: var(--background);
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
   }
 
   .qr-code-image {
@@ -282,7 +207,7 @@
     box-shadow: var(--shadow-sm);
   }
 
-  .payment-amount-qr .amount-label {
+  .amount-label {
     font-size: 1rem;
     color: var(--muted-foreground);
     margin-bottom: 0.5rem;
@@ -291,7 +216,7 @@
     font-weight: 500;
   }
 
-  .payment-amount-qr .amount-value {
+  .amount-value {
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--primary);
@@ -315,7 +240,6 @@
   }
 
   .instructions-button:hover {
-    background: var(--primary);
     opacity: 0.9;
     transform: translateY(-1px);
   }
@@ -333,7 +257,7 @@
   .countdown-container {
     display: flex;
     justify-content: center;
-    margin-bottom: 1.5rem;
+    flex-shrink: 0;
   }
 
   .countdown-circle {
@@ -365,14 +289,15 @@
     gap: 0.5rem;
     font-size: 1rem;
     color: var(--primary);
-    margin-bottom: 1.5rem;
-    padding: 1rem;
+    padding: 1rem 1.5rem;
     background: rgba(0, 129, 167, 0.1);
-    border-radius: var(--radius);
+    border-radius: var(--radius-lg);
     font-weight: 500;
+    margin: 0;
+    border: 1px solid rgba(0, 129, 167, 0.2);
   }
 
-  .cart-style-cancel-button {
+  .cancel-button {
     background: transparent;
     color: #64748b;
     border: 2px solid var(--border);
@@ -389,19 +314,59 @@
     justify-content: center;
   }
 
-  .cart-style-cancel-button:hover {
+  .cancel-button:hover {
     background: var(--muted);
     border-color: var(--muted-foreground);
     transform: translateY(-2px);
     box-shadow: var(--shadow-sm);
   }
 
-  .payment-status.active {
-    display: block;
+  .icon-info::before {
+    content: "ℹ️";
   }
 
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 640px) {
+    .pix-display {
+      padding: 1.5rem;
+      gap: 1.5rem;
+    }
+    
+    .qr-code-display {
+      width: 240px;
+      height: 240px;
+      padding: 1rem;
+    }
+    
+    .qr-code-image,
+    .qr-code-placeholder {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    
+    .amount-timer-row {
+      flex-direction: column;
+      gap: 1.5rem;
+      padding: 1rem;
+    }
+    
+    .instructions-button,
+    .cancel-button {
+      min-width: 250px;
+      min-height: 48px;
+      font-size: 1.125rem;
+    }
+    
+    .status-message {
+      font-size: 1.75rem;
+    }
+    
+    .amount-value {
+      font-size: 1.5rem;
+    }
   }
 </style>

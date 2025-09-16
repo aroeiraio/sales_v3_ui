@@ -1,15 +1,33 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
   import { Home, Receipt, Package } from 'lucide-svelte';
+  import { paymentService } from '$lib/services/payment';
+  import { deliveryService } from '$lib/services/delivery';
+  import { cartService } from '$lib/services/cart';
+  import { errorDialogService } from '$lib/services/errorDialog';
   
   let isVisible = false;
   let orderNumber = '#' + Math.floor(Math.random() * 900000 + 100000).toString();
   let countdown = 20;
-  let countdownInterval: NodeJS.Timeout;
+  let countdownInterval: number;
 
   onMount(() => {
+    // Clean up all services to prevent timeout errors and popups
+    console.log('End page: Cleaning up all services');
+    
+    // Stop all polling services
+    paymentService.stopPolling();
+    deliveryService.stopPolling();
+    
+    // Clear any error dialogs that might be showing
+    try {
+      errorDialogService.closeAllDialogs();
+    } catch (error) {
+      console.warn('Could not close error dialogs:', error);
+    }
+
     // Animate the checkmark after component mounts
     setTimeout(() => {
       isVisible = true;
@@ -23,13 +41,17 @@
         goHome();
       }
     }, 1000);
+  });
 
+  onDestroy(() => {
     // Cleanup interval on component destroy
-    return () => {
-      if (countdownInterval) {
-        clearInterval(countdownInterval);
-      }
-    };
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+    }
+    
+    // Ensure all services are stopped when leaving the end page
+    paymentService.stopPolling();
+    deliveryService.stopPolling();
   });
 
   function goHome() {

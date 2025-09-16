@@ -39,6 +39,23 @@ const PAYMENT_METHOD_REGISTRY: Record<string, Record<string, PaymentMethodDispla
       description: 'Insira ou aproxime seu cartão',
       icon: 'landmark'
     }
+  },
+  'TEST_PAYMENT': {
+    'pix': {
+      name: 'PIX para Testes',
+      description: 'Pagamento instantâneo para testes',
+      icon: 'qr-code'
+    },
+    'credit': {
+      name: 'Cartão de Crédito para Testes',
+      description: 'Cartão de crédito para testes',
+      icon: 'credit-card'
+    },
+    'debit': {
+      name: 'Cartão de Débito para Testes',
+      description: 'Cartão de débito para testes',
+      icon: 'landmark'
+    }
   }
 };
 

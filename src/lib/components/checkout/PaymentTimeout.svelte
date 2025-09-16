@@ -104,7 +104,7 @@
 
   <div class="timeout-actions">
     <button class="cart-style-checkout-button" onclick={() => handleUserAction(onClose)}>
-      Fechar
+      Tentar Novamente
     </button>
     <button class="cart-style-cancel-button" onclick={() => handleUserAction(onCancel)}>
       Cancelar

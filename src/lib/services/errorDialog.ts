@@ -220,12 +220,12 @@ class ErrorDialogService {
           actions: [
             {
               label: 'Tentar Outro Cartão',
-              action: () => window.location.href = '/checkout',
+              action: () => window.location.href = '/payment/method-selection',
               variant: 'primary'
             },
             {
               label: 'Usar PIX',
-              action: () => window.location.href = '/payment/pix',
+              action: () => window.location.href = '/payment/method-selection',
               variant: 'secondary'
             },
             {
@@ -261,7 +261,7 @@ class ErrorDialogService {
           actions: [
             {
               label: 'Tentar Novamente',
-              action: () => window.location.href = '/checkout',
+              action: () => window.location.href = '/payment/method-selection',
               variant: 'primary'
             }
           ]
@@ -274,7 +274,7 @@ class ErrorDialogService {
           actions: [
             {
               label: 'Tentar Novamente',
-              action: () => window.location.href = '/checkout',
+              action: () => window.location.href = '/payment/method-selection',
               variant: 'primary'
             },
             {

@@ -124,7 +124,7 @@
 	}
 
 	function goToCheckout() {
-		window.location.href = '/checkout';
+		window.location.href = '/payment/method-selection';
 	}
 
 	// Reset timeout on any user interaction

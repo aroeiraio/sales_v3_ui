@@ -29,14 +29,16 @@
 
 <section class="section payment-status active success-state">
   <div class="status-card">
-    <div class="status-icon-container">
-      <div class="success-checkmark">
-        <div class="checkmark-circle-success"></div>
-        <div class="checkmark-icon-success">✓</div>
+    <div class="status-header">
+      <div class="status-icon-container">
+        <div class="success-checkmark">
+          <div class="checkmark-circle-success"></div>
+          <div class="checkmark-icon-success">✓</div>
+        </div>
       </div>
-    </div>
-    <div class="status-badge success">
-      Pagamento Aprovado
+      <div class="status-badge success">
+        Pagamento Aprovado
+      </div>
     </div>
     <h2 class="status-title">Preparando seus produtos</h2>
     <p class="status-message">
@@ -50,7 +52,6 @@
 
   {#if paymentResult?.receipt}
     <div class="transaction-details">
-      <h3 class="details-title">Detalhes do Pedido</h3>
       <div class="details-grid">
         <div class="detail-group">
           <span class="detail-label">Número da Transação</span>
@@ -96,26 +97,33 @@
   .status-card {
     background: var(--card, #FFFFFF);
     border-radius: var(--radius-lg, 1.25rem);
-    padding: 3rem 2rem;
+    padding: 2rem;
     text-align: center;
     border: 1px solid var(--border, #E2E8F0);
     margin-bottom: 2rem;
   }
 
+  .status-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
   .status-icon-container {
     width: 80px;
     height: 80px;
-    margin: 0 auto 2rem;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 64px;
+    flex-shrink: 0;
   }
 
   .success-checkmark {
-    width: 120px;
-    height: 120px;
-    margin: 2rem auto;
+    width: 80px;
+    height: 80px;
     position: relative;
     display: flex;
     align-items: center;
@@ -124,8 +132,8 @@
   }
 
   .checkmark-circle-success {
-    width: 120px;
-    height: 120px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     border: 3px solid var(--success, #10B981);
     background: var(--card, white);
@@ -137,7 +145,7 @@
   }
 
   .checkmark-icon-success {
-    font-size: 4.5rem;
+    font-size: 3rem;
     color: var(--success, #10B981);
     font-weight: bold;
     z-index: 1;
@@ -150,10 +158,11 @@
   .status-badge.success {
     background: transparent;
     color: var(--success, #10B981);
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     border: none;
-    margin-bottom: 1rem;
+    margin: 0;
     font-weight: 600;
+    text-align: left;
   }
 
   .status-title {
@@ -177,15 +186,6 @@
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
-  }
-
-  .details-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border, #E2E8F0);
-    color: var(--foreground, #1E293B);
   }
 
   .details-grid {
@@ -239,6 +239,42 @@
     100% {
       opacity: 1;
       transform: scale(1) rotate(0deg);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .status-header {
+      flex-direction: column;
+      gap: 1rem;
+      text-align: center;
+    }
+    
+    .status-badge.success {
+      text-align: center;
+      font-size: 1.25rem;
+    }
+    
+    .status-icon-container {
+      width: 60px;
+      height: 60px;
+    }
+    
+    .success-checkmark {
+      width: 60px;
+      height: 60px;
+    }
+    
+    .checkmark-circle-success {
+      width: 60px;
+      height: 60px;
+    }
+    
+    .checkmark-icon-success {
+      font-size: 2.5rem;
+    }
+    
+    .status-card {
+      padding: 1.5rem;
     }
   }
 </style>

@@ -499,6 +499,9 @@
         {:else}
           {#each products || [] as product}
             <div class="product-card" onclick={() => openProductDialog(product)}>
+              {#if product.amount === 0}
+                <div class="product-badge out-of-stock">Esgotado</div>
+              {/if}
               <div class="product-image">
                 {#if hasValidImage(product)}
                   <img src={getProductImage(product)} alt={product.name || 'Produto'} />
@@ -507,9 +510,6 @@
                     <ImageOff size={32} />
                     <span>Imagem não disponível</span>
                   </div>
-                {/if}
-                {#if product.amount === 0}
-                  <div class="product-badge out-of-stock">Esgotado</div>
                 {/if}
               </div>
               <div class="product-info">
@@ -1166,12 +1166,13 @@
   
   .product-badge {
     position: absolute;
-    top: 10px;
-    right: 10px;
+    top: 8px;
+    right: 8px;
     font-size: 0.75rem;
     font-weight: 600;
-    padding: 0.25rem 0.5rem;
+    padding: 0.375rem 0.75rem;
     border-radius: var(--radius-sm);
+    z-index: 10;
   }
 
   .product-badge.out-of-stock {

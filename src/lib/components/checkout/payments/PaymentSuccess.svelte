@@ -1,5 +1,6 @@
 <script>
   import ProgressSteps from '$lib/components/ui/ProgressSteps.svelte';
+  import { cart } from '$lib/stores/cart';
 
   /**
    * @type {any}
@@ -17,8 +18,35 @@
    * @returns {string}
    */
   function formatPrice(price) {
-    if (typeof price !== 'number' || isNaN(price)) {
-      return 'R$ 0,00';
+    // If price is invalid or zero, try to get from cart
+    if (typeof price !== 'number' || isNaN(price) || price === 0) {
+      const cartTotal = $cart.total;
+      if (cartTotal > 0) {
+        console.log('PaymentSuccess: Using cart total as fallback:', cartTotal);
+        price = cartTotal;
+      } else {
+        // Try sessionStorage as final fallback
+        if (typeof window !== 'undefined') {
+          let storedAmount = sessionStorage.getItem('lastPaymentAmount');
+          if (storedAmount) {
+            price = parseFloat(storedAmount);
+            console.log('PaymentSuccess: Using stored payment amount from session:', price);
+            // Don't clear it here, let the success page handle it
+          } else {
+            // Try the backup amount stored at payment start
+            storedAmount = sessionStorage.getItem('paymentStartAmount');
+            if (storedAmount) {
+              price = parseFloat(storedAmount);
+              console.log('PaymentSuccess: Using payment start amount from session:', price);
+              // Don't clear it here, let the success page handle it
+            } else {
+              return 'R$ 0,00';
+            }
+          }
+        } else {
+          return 'R$ 0,00';
+        }
+      }
     }
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -88,6 +116,7 @@
     height: fit-content;
     max-height: calc(100vh - 160px);
     overflow-y: auto;
+    min-width: 400px; /* Ensure consistent minimum width */
   }
 
   .success-state .status-card {
@@ -186,6 +215,7 @@
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
+    min-height: 120px; /* Consistent height for layout stability */
   }
 
   .details-grid {

@@ -477,6 +477,12 @@ class CartService {
 
   async clearCart(showErrorDialog: boolean = true): Promise<void> {
     try {
+      // Store cart total as backup before clearing (for payment success page)
+      if (typeof window !== 'undefined' && this.cart.total > 0) {
+        localStorage.setItem('lastCartTotal', this.cart.total.toString());
+        console.log('Cart service: Stored cart total in localStorage before clearing:', this.cart.total);
+      }
+
       // Use the correct session endpoint to clear cart and close session
       const response = await fetch('http://localhost:8090/interface/session', {
         method: 'DELETE',

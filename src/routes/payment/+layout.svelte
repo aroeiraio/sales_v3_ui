@@ -153,6 +153,8 @@
     background: var(--background);
     display: flex;
     flex-direction: column;
+    /* Hide scrollbars but allow scrolling */
+    overflow: auto;
   }
 
   .payment-container {
@@ -163,6 +165,7 @@
     margin: 0 auto;
     padding: 1rem;
     gap: 2rem;
+    width: 100%;
   }
 
   .payment-content {
@@ -172,5 +175,102 @@
     justify-content: center;
     align-items: center;
     min-height: 60vh;
+    width: 100%;
+    max-width: 800px; /* Match container max-width */
+    margin: 0 auto;
+  }
+
+  /* Hide scrollbars globally for payment screens */
+  :global(html) {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+  }
+
+  :global(html::-webkit-scrollbar) {
+    width: 0;
+    height: 0;
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  :global(body) {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+  }
+
+  :global(body::-webkit-scrollbar) {
+    width: 0;
+    height: 0;
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* Hide scrollbars on all elements within payment layout */
+  .payment-layout :global(*) {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+  }
+
+  .payment-layout :global(*::-webkit-scrollbar) {
+    width: 0;
+    height: 0;
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* Standardize width for all payment components */
+  .payment-layout :global(.payment-progress),
+  .payment-layout :global(.payment-content),
+  .payment-layout :global(.section),
+  .payment-layout :global(.success-container),
+  .payment-layout :global(.instructions-container),
+  .payment-layout :global(.method-selection-container),
+  .payment-layout :global(.payment-page),
+  .payment-layout :global(.payment-wrapper),
+  .payment-layout :global(.processing-container),
+  .payment-layout :global(.pix-container),
+  .payment-layout :global(.card-container),
+  .payment-layout :global(.retry-container),
+  .payment-layout :global(.failed-container),
+  .payment-layout :global(.timeout-container),
+  .payment-layout :global(.delivery-info),
+  .payment-layout :global(.payment-details) {
+    width: 100% !important;
+    max-width: 800px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Standardize delivery content areas for consistent visual width */
+  .payment-layout :global(.delivery-steps),
+  .payment-layout :global(.delivery-progress) {
+    width: 500px !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Wider containers for better content display */
+  .payment-layout :global(.delivery-info),
+  .payment-layout :global(.payment-details),
+  .payment-layout :global(.success-container) {
+    width: 600px !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Preserve specific padding for different container types */
+  .payment-layout :global(.delivery-steps),
+  .payment-layout :global(.delivery-progress) {
+    padding: 0.75rem !important;
+  }
+
+  .payment-layout :global(.delivery-info) {
+    padding: 0.75rem !important;
+  }
+
+  /* Ensure delivery step items don't expand */
+  .payment-layout :global(.delivery-step) {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 </style>

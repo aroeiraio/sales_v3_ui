@@ -96,12 +96,13 @@
           Volte sempre!
         </p>
 
-        <div class="order-info">
+        <!-- Order info hidden as requested -->
+        <!-- <div class="order-info">
           <Receipt size={24} class="order-icon" />
           <p class="order-number">
             Número do Pedido: <strong>{orderNumber}</strong>
           </p>
-        </div>
+        </div> -->
 
         <button class="action-button" onclick={goHome}>
           <Home size={20} />

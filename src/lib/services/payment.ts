@@ -197,6 +197,22 @@ class PaymentService {
     try {
       // Store current payment method for navigation
       this.currentPaymentMethod = paymentMethod;
+
+      // Store cart total at payment start as backup
+      if (typeof window !== 'undefined') {
+        try {
+          const { get } = await import('svelte/store');
+          const { cart } = await import('../stores/cart');
+          const currentCart = get(cart);
+          if (currentCart.total > 0) {
+            sessionStorage.setItem('paymentStartAmount', currentCart.total.toString());
+            console.log('Payment service: Stored cart total at payment start:', currentCart.total);
+          }
+        } catch (error) {
+          console.warn('Payment service: Could not store cart total:', error);
+        }
+      }
+
       this.setState('processing');
       
       // Session is optional - checkout flow doesn't require sessions
@@ -327,7 +343,7 @@ class PaymentService {
         }
 
         const status: PosPaymentStatus = await response.json();
-        this.handleStatusUpdate(status);
+        await this.handleStatusUpdate(status);
 
       } catch (error) {
         console.error('Status polling failed:', error);
@@ -336,7 +352,7 @@ class PaymentService {
     }, 1000); // Poll every second
   }
 
-  private handleStatusUpdate(status: PosPaymentStatus) {
+  private async handleStatusUpdate(status: PosPaymentStatus) {
     console.log('Payment status update:', status);
     console.log('Current payment method:', this.currentPaymentMethod);
     console.log('Status broker:', status.broker);
@@ -397,10 +413,29 @@ class PaymentService {
         if (status.status === 'PAYMENT_APPROVED') {
           console.log('Payment approved - stopping polling and transitioning to success state');
           this.stopPolling();
+
+          // Get cart total BEFORE clearing it, in case payment amount is missing
+          let paymentAmount = status.amount;
+          if (!paymentAmount || paymentAmount === 0) {
+            // Import cart dynamically to avoid circular dependencies
+            const { get } = await import('svelte/store');
+            const { cart } = await import('../stores/cart');
+            const currentCart = get(cart);
+            paymentAmount = currentCart.total;
+            console.log('Payment service: Using cart total as payment amount:', paymentAmount);
+
+            // Store in sessionStorage as backup for success page
+            if (typeof window !== 'undefined' && paymentAmount > 0) {
+              sessionStorage.setItem('lastPaymentAmount', paymentAmount.toString());
+              console.log('Payment service: Stored payment amount in session storage:', paymentAmount);
+            }
+          }
+
           this.setState('success', {
             transactionId: status.transactionId,
-            amount: status.amount
+            amount: paymentAmount
           });
+
           // Clear cart on successful payment (non-blocking, no error dialog)
           cartService.clearCart(false).catch(error => {
             console.warn('Cart clearing failed after successful payment:', error);
@@ -452,9 +487,9 @@ class PaymentService {
       console.log('Payment reset already in progress, ignoring duplicate request');
       return;
     }
-    
+
     this.isResettingPayment = true;
-    
+
     try {
       console.log('Payment service: Resetting payment state');
       this.stopPolling();
@@ -462,6 +497,14 @@ class PaymentService {
       this.currentPaymentMethod = '';
       // Status retry mechanism removed
       paymentNavigationService.resetRetryCount();
+
+      // Clear payment session storage on reset (but not when navigating to success)
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('paymentStartAmount');
+        sessionStorage.removeItem('lastPaymentAmount');
+        console.log('Payment service: Cleared payment amounts from session storage');
+      }
+
       this.setState('idle');
     } finally {
       // Use setTimeout to prevent immediate subsequent calls

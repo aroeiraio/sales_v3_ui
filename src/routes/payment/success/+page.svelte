@@ -4,12 +4,24 @@
   import { page } from '$app/stores';
   import { paymentService } from '$lib/services/payment';
   import { deliveryService } from '$lib/services/delivery';
+  import { cart } from '$lib/stores/cart';
 
   let paymentData: any = null;
   let deliverySteps: any[] = [];
   let deliveryStatus: any = null;
   let isDeliveryComplete = false;
   let redirectTimeout: number | null = null;
+
+  // Reactive payment data - updates when cart changes
+  $: if (paymentData && $cart) {
+    if (paymentData.amount === 0 && $cart.total > 0) {
+      console.log('Payment success: Updating amount from cart total:', $cart.total);
+      paymentData = {
+        ...paymentData,
+        amount: $cart.total
+      };
+    }
+  }
   
   onMount(async () => {
     // Ensure payment polling is stopped when reaching success page
@@ -19,7 +31,52 @@
     // Get payment data from URL params (set by payment navigation service)
     const urlParams = new URLSearchParams($page.url.search);
     const transactionId = urlParams.get('transactionId') || `success-${Date.now()}`;
-    const amount = parseFloat(urlParams.get('amount') || '0');
+
+    // Try to get amount from URL params first, then fallback to cart total
+    let amount = parseFloat(urlParams.get('amount') || '0');
+    const currentCart = $cart;
+
+    console.log('Payment success: URL amount:', urlParams.get('amount'));
+    console.log('Payment success: Parsed amount:', amount);
+    console.log('Payment success: Cart total:', currentCart.total);
+    console.log('Payment success: Cart items:', currentCart.items);
+    console.log('Payment success: Cart items length:', currentCart.items?.length);
+    console.log('Payment success: Cart object:', currentCart);
+
+    if (amount === 0) {
+      // Fallback to cart total if URL param is missing or zero
+      amount = currentCart.total || 0;
+      console.log('Payment success: Amount from URL was 0, using cart total:', amount);
+
+      // If cart is also empty, try sessionStorage backups
+      if (amount === 0 && typeof window !== 'undefined') {
+        console.log('Payment success: Amount is 0, trying sessionStorage backups...');
+
+        // Try multiple sessionStorage keys
+        const storageKeys = ['lastPaymentAmount', 'paymentStartAmount', 'cartTotal'];
+
+        for (const key of storageKeys) {
+          const storedAmount = sessionStorage.getItem(key);
+          if (storedAmount && parseFloat(storedAmount) > 0) {
+            amount = parseFloat(storedAmount);
+            console.log(`Payment success: Using stored amount from ${key}:`, amount);
+            // Don't clear immediately, keep as backup
+            break;
+          }
+        }
+
+        // Final fallback: try localStorage
+        if (amount === 0) {
+          const lastCartTotal = localStorage.getItem('lastCartTotal');
+          if (lastCartTotal && parseFloat(lastCartTotal) > 0) {
+            amount = parseFloat(lastCartTotal);
+            console.log('Payment success: Using localStorage lastCartTotal:', amount);
+          }
+        }
+      }
+    } else {
+      console.log('Payment success: Using amount from URL:', amount);
+    }
     
     paymentData = {
       transactionId,
@@ -27,6 +84,9 @@
       timestamp: new Date().toISOString(),
       paymentMethod: 'PIX' // or from service
     };
+
+    console.log('Payment success: Final paymentData:', paymentData);
+    console.log('Payment success: Final amount being used:', amount);
 
     // Start delivery status polling like checkout page does
     console.log('Payment success page: Starting delivery polling');
@@ -43,14 +103,14 @@
       
       // If delivery is complete, redirect to end screen
       if (isDeliveryComplete) {
-        console.log('Payment success page: Delivery complete, redirecting to end screen');
+        console.log('Payment success page: Delivery complete, waiting 5 seconds before redirecting to end screen');
         if (redirectTimeout) {
           clearTimeout(redirectTimeout);
         }
         setTimeout(() => {
-          console.log('Payment success page: Executing redirect to /end');
+          console.log('Payment success page: Executing redirect to /end after 5 second delay');
           goto('/end');
-        }, 2000); // Give user time to see completion
+        }, 5000); // Wait 5 seconds after delivery completion
       }
     }, 2000); // Poll every 2 seconds
 
@@ -97,41 +157,19 @@
 
 <div class="success-page">
   <div class="success-container">
-    <div class="success-animation">
-      <div class="success-checkmark">
-        <div class="checkmark-circle">
-          <div class="checkmark">✓</div>
-        </div>
-        <div class="success-pulse"></div>
-      </div>
-    </div>
-
     <div class="success-content">
       <div class="success-header">
-        <h1 class="success-title">Pagamento Aprovado!</h1>
+        <div class="title-row">
+          <div class="success-checkmark">
+            <div class="checkmark-circle">
+              <div class="checkmark">✓</div>
+            </div>
+            <div class="success-pulse"></div>
+          </div>
+          <h1 class="success-title">Pagamento Aprovado!</h1>
+        </div>
         <p class="success-subtitle">Sua compra foi processada com sucesso</p>
       </div>
-
-      {#if paymentData}
-        <div class="payment-details">
-          <div class="detail-row">
-            <span class="label">ID da Transação:</span>
-            <span class="value">{paymentData.transactionId}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Valor Pago:</span>
-            <span class="value amount">{formatPrice(paymentData.amount)}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Data e Hora:</span>
-            <span class="value">{formatDate(paymentData.timestamp)}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">Método:</span>
-            <span class="value">{paymentData.paymentMethod}</span>
-          </div>
-        </div>
-      {/if}
 
       <div class="delivery-info">
         <div class="delivery-icon">📦</div>
@@ -188,6 +226,27 @@
         {/if}
       </div>
 
+      {#if paymentData}
+        <div class="payment-details">
+          <div class="detail-row">
+            <span class="label">ID da Transação:</span>
+            <span class="value">{paymentData.transactionId}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Valor Pago:</span>
+            <span class="value amount">{formatPrice(paymentData.amount)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Data e Hora:</span>
+            <span class="value">{formatDate(paymentData.timestamp)}</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Método:</span>
+            <span class="value">{paymentData.paymentMethod}</span>
+          </div>
+        </div>
+      {/if}
+
       {#if !isDeliveryComplete}
         <div class="auto-redirect">
           <p>
@@ -205,26 +264,17 @@
         </div>
       {/if}
     </div>
-
-    <div class="success-actions">
-      <button class="continue-button" on:click={() => goto('/end')}>
-        {#if isDeliveryComplete}
-          Finalizar
-        {:else}
-          Ver Entrega
-        {/if}
-      </button>
-    </div>
   </div>
 </div>
 
 <style>
   .success-page {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    min-height: 100vh;
+    min-height: 80vh;
     padding: 1rem;
+    padding-top: 2rem;
   }
 
   .success-container {
@@ -232,28 +282,31 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    max-width: 800px;
-    width: 100%;
-    gap: 1.5rem;
+    width: 600px; /* Match wider content containers (delivery-info, payment-details) */
+    gap: 1rem;
   }
 
-  .success-animation {
-    position: relative;
-    margin-bottom: 1rem;
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 
   .success-checkmark {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 60px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
 
   .checkmark-circle {
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
     background: var(--primary);
     border-radius: 50%;
     display: flex;
@@ -266,7 +319,7 @@
 
   .checkmark {
     color: white;
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: bold;
     line-height: 1;
     animation: checkmark-draw 0.5s ease-out 0.3s both;
@@ -277,8 +330,8 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
     border: 2px solid var(--primary);
     border-radius: 50%;
     animation: success-pulse 2s ease-out infinite;
@@ -287,7 +340,7 @@
   .success-content {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
     width: 100%;
   }
 
@@ -296,6 +349,7 @@
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
+    margin-bottom: 0.5rem;
   }
 
   .success-title {
@@ -303,6 +357,7 @@
     font-weight: 700;
     color: var(--primary);
     margin: 0;
+    text-align: left;
   }
 
   .success-subtitle {
@@ -319,6 +374,9 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    width: 600px; /* Match delivery-info width */
+    margin: 0 auto;
+    box-sizing: border-box;
   }
 
   .detail-row {
@@ -349,13 +407,19 @@
   }
 
   .delivery-info {
-    background: var(--muted);
+    background: var(--card);
     border-radius: var(--radius-lg);
-    padding: 1rem;
+    padding: 0.75rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    width: 600px; /* Wider than delivery steps for better content display */
+    margin: 0 auto;
+    min-height: 200px; /* Ensure consistent minimum height */
+    box-sizing: border-box;
   }
 
   .delivery-icon {
@@ -380,8 +444,16 @@
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
-    width: 100%;
-    max-width: 300px;
+    width: 500px; /* Fixed width instead of max-width */
+    margin: 0 auto;
+    min-height: 120px; /* Consistent height with delivery-steps */
+    justify-content: center;
+    padding: 0.75rem; /* Match delivery-step padding for visual consistency */
+    box-sizing: border-box;
+    background: var(--card); /* Match delivery-info background */
+    border-radius: var(--radius-lg); /* Match delivery-info border radius */
+    border: 1px solid var(--border); /* Match delivery-info border */
+    box-shadow: var(--shadow-sm); /* Match delivery-info shadow */
   }
 
   .progress-bar {
@@ -408,9 +480,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    width: 100%;
-    max-width: 400px;
+    width: 500px; /* Fixed width to match delivery-progress */
     margin: 0 auto;
+    min-height: 120px; /* Consistent height with progress bar */
+    justify-content: center;
+    padding: 0.75rem; /* Consistent padding with progress container */
+    box-sizing: border-box;
+    /* Remove background/border from outer container - styling is on individual steps */
   }
 
   .delivery-step {
@@ -422,6 +498,10 @@
     background: var(--card);
     border: 1px solid var(--border);
     transition: all 0.3s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden; /* Prevent content from expanding beyond container */
   }
 
   .delivery-step.completed {
@@ -517,13 +597,14 @@
     background: var(--primary);
     color: var(--primary-foreground);
     border: none;
+    min-height: 48px;
+    min-width: 250px;
     padding: 1rem 2rem;
     border-radius: var(--radius);
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 1.125rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    min-width: 200px;
   }
 
   .continue-button:hover {
@@ -582,37 +663,54 @@
     }
   }
 
+  @media (max-width: 768px) {
+    .success-page {
+      padding: 1rem;
+    }
+
+    .payment-details {
+      grid-template-columns: 1fr;
+      padding: 1rem;
+    }
+  }
+
   @media (max-width: 640px) {
+    .title-row {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
     .success-title {
       font-size: 1.75rem;
+      text-align: center;
     }
-    
+
     .success-subtitle {
       font-size: 1rem;
     }
-    
+
     .success-checkmark {
       width: 70px;
       height: 70px;
     }
-    
+
     .checkmark-circle {
       width: 60px;
       height: 60px;
     }
-    
+
     .checkmark {
       font-size: 1.75rem;
     }
-    
+
     .success-pulse {
       width: 60px;
       height: 60px;
     }
-    
+
     .delivery-info,
     .payment-details {
-      padding: 0.75rem;
+      padding: 1rem;
     }
   }
 </style>

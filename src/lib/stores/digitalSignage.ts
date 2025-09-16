@@ -95,9 +95,20 @@ export const digitalSignageActions = {
       const urls = digitalSignageService.getMediaUrls(
         digitalSignageService.filterValidItems(get(digitalSignageItems))
       );
+
+      if (urls.length === 0) {
+        console.log('Digital signage: No videos available, staying at index 0');
+        return 0;
+      }
+
+      if (urls.length === 1) {
+        console.log('Digital signage: Single video playlist, staying at index 0 for continuous loop');
+        return 0; // Always stay at index 0 for single video
+      }
+
       const nextIndex = index + 1 < urls.length ? index + 1 : 0; // Loop back to start
       console.log(`Digital signage: Moving from video ${index} to video ${nextIndex} (total: ${urls.length} videos)`);
-      
+
       return nextIndex;
     });
   },

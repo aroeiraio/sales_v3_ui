@@ -78,11 +78,7 @@
       <i class="icon-info"></i>
       Complete o pagamento antes que o tempo expire
     </p>
-    
-    <button class="instructions-button" on:click={onShowInstructions}>
-      Como pagar
-    </button>
-    
+
     <button class="cancel-button" on:click={onCancel}>
       Cancelar
     </button>
@@ -154,10 +150,10 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    gap: 2rem;
-    background: var(--background);
-    padding: 1.5rem;
-    border-radius: var(--radius-lg);
+    gap: 1.5rem;
+    background: var(--muted);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
   }
 
@@ -198,28 +194,25 @@
   }
 
   .payment-amount-qr {
-    background: var(--card);
-    border: 2px solid var(--primary);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.75rem;
     flex: 1;
     min-width: 0;
-    box-shadow: var(--shadow-sm);
   }
 
   .amount-label {
-    font-size: 1rem;
+    font-size: 0.875rem;
     color: var(--muted-foreground);
-    margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
     font-weight: 500;
   }
 
   .amount-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--foreground);
   }
 
   .instructions-button {
@@ -366,7 +359,7 @@
     }
     
     .amount-value {
-      font-size: 1.5rem;
+      font-size: 1.125rem;
     }
   }
 </style>

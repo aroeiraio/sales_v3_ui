@@ -1,5 +1,7 @@
 import { goto } from '$app/navigation';
 import type { PaymentState } from './payment';
+import { get } from 'svelte/store';
+import { cart } from '../stores/cart';
 
 /**
  * Payment Navigation Service
@@ -95,10 +97,24 @@ class PaymentNavigationService {
 
       case 'success':
         // Navigate to success page with transaction data
+        console.log('PaymentNavigation: SUCCESS case - received data:', data);
+        console.log('PaymentNavigation: SUCCESS - transactionId:', data?.transactionId);
+        console.log('PaymentNavigation: SUCCESS - amount:', data?.amount);
+
+        // If amount is missing or zero, try to get it from cart
+        let amount = data?.amount;
+        if (!amount || amount === 0) {
+          const currentCart = get(cart);
+          amount = currentCart.total;
+          console.log('PaymentNavigation: SUCCESS - amount was missing/zero, using cart total:', amount);
+        }
+
         const successParams = new URLSearchParams({
           transactionId: data?.transactionId || '',
-          amount: data?.amount?.toString() || '0'
+          amount: amount?.toString() || '0'
         });
+
+        console.log('PaymentNavigation: SUCCESS - URL params:', successParams.toString());
         goto(`/payment/success?${successParams.toString()}`);
         break;
 

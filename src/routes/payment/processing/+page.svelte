@@ -59,7 +59,6 @@
     
     <div class="processing-content">
       <h2>Processando Pagamento</h2>
-      <p class="processing-message">{processingMessage}</p>
       <p class="processing-subtitle">Por favor, aguarde enquanto preparamos seu pagamento...</p>
     </div>
 
@@ -152,13 +151,14 @@
 
   .cancel-button {
     background: transparent;
-    color: #64748b;
+    color: var(--muted-foreground);
     border: 2px solid var(--border);
-    min-width: 300px;
+    min-width: 250px;
+    min-height: 48px;
     padding: 1rem 2rem;
     border-radius: var(--radius);
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 1.125rem;
     cursor: pointer;
     transition: all 0.2s ease;
   }

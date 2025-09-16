@@ -39,6 +39,10 @@
     border-radius: var(--radius-lg);
     padding: 1.5rem;
     border: 1px solid var(--border);
+    width: 100%;
+    max-width: 800px; /* Match layout container max-width */
+    margin: 0 auto;
+    box-sizing: border-box;
   }
 
   .progress-steps {

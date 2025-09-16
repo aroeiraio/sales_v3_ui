@@ -560,7 +560,8 @@
     background: #22c55e;
     color: white;
     border: none;
-    padding: 1.25rem 2.5rem;
+    min-height: 48px;
+    padding: 1rem 2rem;
     border-radius: var(--radius);
     font-size: 1.125rem;
     font-weight: 700;
@@ -569,7 +570,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    min-width: 280px;
+    min-width: 250px;
     justify-content: center;
     text-transform: uppercase;
     letter-spacing: 0.025em;

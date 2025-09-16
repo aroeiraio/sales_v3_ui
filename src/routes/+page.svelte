@@ -10,13 +10,14 @@
 		effectiveFontColor,
 		visualSettingsRefreshTimer
 	} from '$lib/stores/visualSettings';
-	import { 
+	import {
 		digitalSignageActions,
 		hasValidVideos,
 		currentVideoUrl,
 		isPlaying,
 		isFullscreen,
-		playlistProgress
+		playlistProgress,
+		videoUrls
 	} from '$lib/stores/digitalSignage';
 	import { sessionService } from '$lib/services/session';
 	import { systemStatusService } from '$lib/services/systemStatus';
@@ -119,7 +120,17 @@
 	}
 
 	function handleVideoEnded() {
-		digitalSignageActions.onVideoEnded();
+		console.log('Video ended, current video count:', $videoUrls.length);
+
+		// For single video, restart immediately to ensure continuous looping
+		if ($videoUrls.length === 1 && videoElement) {
+			console.log('Single video ended, restarting...');
+			videoElement.currentTime = 0;
+			scheduleVideoPlay();
+		} else {
+			// Multiple videos, use normal next video logic
+			digitalSignageActions.onVideoEnded();
+		}
 	}
 
 
@@ -234,6 +245,7 @@
 				src={$currentVideoUrl}
 				autoplay
 				muted={isMuted}
+				loop={$videoUrls.length === 1}
 				onclick={handleVideoClick}
 				onended={handleVideoEnded}
 				onloadeddata={handleVideoLoad}

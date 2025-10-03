@@ -147,7 +147,7 @@ class PaymentService {
       console.log('PIX payment QR code generation timeout reached (20s), showing payment failure');
       try {
         // Cancel the payment
-        await fetch('http://localhost:8090/interface/payment', {
+        await fetch(`${ENDPOINTS.baseUrl}/payment`, {
           method: 'DELETE'
         });
         this.stopPolling();
@@ -182,7 +182,7 @@ class PaymentService {
     this.isCancellingPayment = true;
     
     try {
-      await fetch('http://localhost:8090/interface/payment', {
+      await fetch(`${ENDPOINTS.baseUrl}/payment`, {
         method: 'DELETE'
       });
       console.log('Payment canceled successfully');
@@ -235,7 +235,7 @@ class PaymentService {
       console.log('Session ID:', session?.sessionId || 'No session (checkout flow)');
       
       // Start payment with PoS API
-      const response = await fetch('http://localhost:8090/interface/payment', {
+      const response = await fetch(`${ENDPOINTS.baseUrl}/payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -336,7 +336,7 @@ class PaymentService {
           return;
         }
 
-        const response = await fetch('http://localhost:8090/interface/payment/status');
+        const response = await fetch(`${ENDPOINTS.baseUrl}/payment/status`);
         
         if (!response.ok) {
           throw new Error(`Status API error: ${response.status}`);

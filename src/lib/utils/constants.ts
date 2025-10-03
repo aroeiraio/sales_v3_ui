@@ -1,6 +1,6 @@
-// Application constants
-export const API_BASE_URL = 'http://localhost:8090/interface';
-export const MEDIA_BASE_URL = 'http://localhost:8090'; // Base URL for media files
+// Application constants - using environment variables with fallbacks
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090/interface';
+export const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_BASE_URL || 'http://localhost:8090'; // Base URL for media files
 export const LOCAL_MEDIA_PATH = '/data/Projects/Inobag/sales_v3/build'; // Local build path for media files
 
 // URL normalization patterns
@@ -26,7 +26,7 @@ export const COLORS = {
 } as const;
 
 export const ENDPOINTS = {
-  baseUrl: 'http://localhost:8090',
+  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090/interface',
   visual_settings: '/visual_settings',
   digital_signage: '/digital_signage',
   session: '/session',

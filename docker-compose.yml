@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  sales_api:
+    image: your-api-image:latest  # Replace with your actual API image
+    container_name: sales_api
+    ports:
+      - "8090:8090"  # HTTP API server port
+      - "9010:9010"  # WebSocket server port
+    environment:
+      - NODE_ENV=production
+      - API_PORT=8090
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]  # Adjust health check endpoint
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sales-network
+
+  sales_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8090/interface
+        VITE_MEDIA_BASE_URL: http://localhost:8090
+        VITE_WEBSOCKET_URL: ws://localhost:9010
+    container_name: sales_frontend
+    ports:
+      - "8080:8080"  # Frontend port (mapped to 8080 externally)
+    env_file:
+      - docker.env
+    restart: unless-stopped
+    depends_on:
+      sales_api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sales-network
+
+networks:
+  sales-network:
+    driver: bridge

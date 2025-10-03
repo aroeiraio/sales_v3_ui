@@ -1,7 +1,6 @@
 import { get } from '../utils/api';
 import { ENDPOINTS } from '../utils/constants';
 import { errorDialogService } from './errorDialog';
-import { mockCategories, mockProducts } from './mockData';
 
 export interface ProductMedia {
   filename: string;
@@ -74,9 +73,9 @@ class ProductsService {
       console.log('Filtered categories:', this.categories);
       return this.categories;
     } catch (error) {
-      console.warn('Failed to load categories from API, using mock data:', error);
-      // Use mock data when API is not available
-      this.categories = mockCategories;
+      console.warn('Failed to load categories from API:', error);
+      // Return empty array instead of mock data to avoid showing fake products
+      this.categories = [];
       return this.categories;
     }
   }
@@ -109,13 +108,9 @@ class ProductsService {
       
       return this.products;
     } catch (error) {
-      console.warn('Failed to load products from API, using mock data:', error);
-      // Use mock data when API is not available
-      if (categoryId !== undefined) {
-        this.products = mockProducts.filter(product => product.categoryId === categoryId);
-      } else {
-        this.products = mockProducts;
-      }
+      console.warn('Failed to load products from API:', error);
+      // Return empty array instead of mock data to avoid showing fake products
+      this.products = [];
       return this.products;
     }
   }
@@ -145,12 +140,9 @@ class ProductsService {
       
       return this.products;
     } catch (error) {
-      console.warn('Failed to search products from API, using mock data:', error);
-      // Use mock data when API is not available
-      this.products = mockProducts.filter(product => 
-        product.name.toLowerCase().includes(expression.toLowerCase()) ||
-        product.description.toLowerCase().includes(expression.toLowerCase())
-      );
+      console.warn('Failed to search products from API:', error);
+      // Return empty array instead of mock data to avoid showing fake products
+      this.products = [];
       return this.products;
     }
   }

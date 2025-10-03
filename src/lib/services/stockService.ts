@@ -3,7 +3,7 @@ import { apiClient } from './api.js';
 
 export class StockService implements IStockService {
 	async getStock(): Promise<StockItem[]> {
-		const rawData = await apiClient.get<any[]>('/stock/');
+		const rawData = await apiClient.get<any[]>('/dashboard/stock/');
 		
 		// Filter out invalid objects and timestamp entries
 		const validItems = rawData.filter((item: any) => 
@@ -32,7 +32,7 @@ export class StockService implements IStockService {
 	}
 
 	async updateStock(update: StockUpdate): Promise<void> {
-		await apiClient.put('/stock/', update);
+		await apiClient.put('/dashboard/stock/', update);
 	}
 
 	// Helper method to validate if an item has valid data for display

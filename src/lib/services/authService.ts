@@ -8,16 +8,16 @@ export class AuthService implements IAuthService {
 			username: credentials.username,
 			password: parseInt(credentials.password) || credentials.password
 		};
-		await apiClient.post('/login/', loginData);
+		await apiClient.post('/dashboard/login/', loginData);
 		return { username: credentials.username };
 	}
 
 	async logout(): Promise<void> {
-		await apiClient.delete('/login/');
+		await apiClient.delete('/dashboard/login/');
 	}
 
 	async renewSession(): Promise<void> {
-		await apiClient.get('/login/renew');
+		await apiClient.get('/dashboard/login/renew');
 	}
 }
 

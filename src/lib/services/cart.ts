@@ -2,6 +2,7 @@ import { errorDialogService } from './errorDialog';
 import { sessionService } from './session';
 import { toastService } from './toast';
 import { cart, cartActions } from '../stores/cart';
+import { API_BASE_URL } from '../utils/constants';
 
 export interface CartItem {
   amount: number;
@@ -46,7 +47,7 @@ class CartService {
 
   async getCart(): Promise<Cart> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart/');
+      const response = await fetch(`${API_BASE_URL}/cart/`);
       
       if (response.status === 404) {
         // Empty cart - return default empty cart
@@ -90,7 +91,7 @@ class CartService {
   async addItem(itemId: number, type: string = 'product', retryCount: number = 0): Promise<void> {
     console.log('🚀 addItem called with:', { itemId, type, retryCount });
     try {
-      const response = await fetch('http://localhost:8090/interface/cart/', {
+      const response = await fetch(`${API_BASE_URL}/cart/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -378,7 +379,7 @@ class CartService {
 
   async removeItem(itemId: string): Promise<void> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart/', {
+      const response = await fetch(`${API_BASE_URL}/cart/`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -484,7 +485,7 @@ class CartService {
       }
 
       // Use the correct session endpoint to clear cart and close session
-      const response = await fetch('http://localhost:8090/interface/session', {
+      const response = await fetch(`${API_BASE_URL}/session`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -615,7 +616,7 @@ class CartService {
   // Checkout validation
   async validateForCheckout(): Promise<{ isValid: boolean; errors: string[] }> {
     try {
-      const response = await fetch('http://localhost:8090/interface/cart/validate');
+      const response = await fetch(`${API_BASE_URL}/cart/validate`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

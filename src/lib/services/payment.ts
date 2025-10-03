@@ -235,6 +235,8 @@ class PaymentService {
       console.log('Session ID:', session?.sessionId || 'No session (checkout flow)');
       
       // Start payment with PoS API
+      console.log('Payment API URL being called:', `${ENDPOINTS.baseUrl}/payment`);
+      console.log('ENDPOINTS.baseUrl value:', ENDPOINTS.baseUrl);
       const response = await fetch(`${ENDPOINTS.baseUrl}/payment`, {
         method: 'POST',
         headers: {

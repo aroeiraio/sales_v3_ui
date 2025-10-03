@@ -20,8 +20,8 @@ class DeliveryService {
   
   async getDeliveryStatus(): Promise<DeliveryStatus> {
     try {
-      console.log('Consulting delivery endpoint: http://localhost:8090/sales/v1/delivery');
-      const response = await fetch('http://localhost:8090/sales/v1/delivery');
+      console.log('Consulting delivery endpoint:', `${ENDPOINTS.baseUrl}${ENDPOINTS.delivery}`);
+      const response = await fetch(`${ENDPOINTS.baseUrl}${ENDPOINTS.delivery}`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

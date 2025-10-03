@@ -7,6 +7,12 @@ export default defineConfig({
 		port: 8090,
 		host: true
 	},
+	define: {
+		// Explicitly define environment variables for the build
+		'import.meta.env.VITE_API_BASE_URL': JSON.stringify(process.env.VITE_API_BASE_URL || 'http://localhost:8090/interface'),
+		'import.meta.env.VITE_MEDIA_BASE_URL': JSON.stringify(process.env.VITE_MEDIA_BASE_URL || 'http://localhost:8090'),
+		'import.meta.env.VITE_WEBSOCKET_URL': JSON.stringify(process.env.VITE_WEBSOCKET_URL || 'ws://localhost:9010'),
+	},
 	plugins: [
 		sveltekit(),
 		VitePWA({

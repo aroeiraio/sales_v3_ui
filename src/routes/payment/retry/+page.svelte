@@ -58,7 +58,8 @@
 <div class="retry-page">
   <div class="retry-container">
     <div class="retry-header">
-      <div class="retry-icon">🔄</div>
+      <div class="retry-icon">❌</div>
+      <p class="payment-refused-message">Lamento, mas o seu pagamento foi recusado</p>
       <h1>Vamos tentar novamente?</h1>
       <div class="timer-display">
         <span class="timer-text">Cancelamento automático em {timeLeft}s</span>
@@ -111,7 +112,18 @@
 
   .retry-icon {
     font-size: 4rem;
-    animation: rotate 3s ease-in-out infinite;
+    animation: shake 2s ease-in-out infinite;
+  }
+
+  .payment-refused-message {
+    font-size: 1.125rem;
+    color: var(--destructive);
+    font-weight: 600;
+    margin: 1rem 0 0.5rem 0;
+    padding: 0.75rem 1.5rem;
+    background: rgba(240, 113, 103, 0.1);
+    border-radius: var(--radius);
+    border: 1px solid rgba(240, 113, 103, 0.3);
   }
 
   .retry-header h1 {
@@ -219,21 +231,21 @@
   }
 
 
-  @keyframes rotate {
-    0% {
-      transform: rotate(0deg);
+  @keyframes shake {
+    0%, 20%, 50%, 80%, 100% {
+      transform: translateX(0);
     }
-    25% {
-      transform: rotate(90deg);
+    10% {
+      transform: translateX(-10px);
     }
-    50% {
-      transform: rotate(180deg);
+    30% {
+      transform: translateX(10px);
     }
-    75% {
-      transform: rotate(270deg);
+    60% {
+      transform: translateX(-5px);
     }
-    100% {
-      transform: rotate(360deg);
+    70% {
+      transform: translateX(5px);
     }
   }
 
@@ -244,6 +256,11 @@
 
     .retry-icon {
       font-size: 3rem;
+    }
+
+    .payment-refused-message {
+      font-size: 1rem;
+      padding: 0.5rem 1rem;
     }
 
     .action-group {

@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { MEDIA_BASE_URL } from '../../../utils/constants';
 
   /**
    * @type {any}
@@ -96,7 +97,7 @@
     <div class="qr-code-display">
       {#if paymentResult?.qrcode_source}
         <img 
-          src="http://localhost:8090{paymentResult.qrcode_source}" 
+          src="{MEDIA_BASE_URL}{paymentResult.qrcode_source}" 
           alt="QR Code PIX" 
           class="qr-code-image"
         />

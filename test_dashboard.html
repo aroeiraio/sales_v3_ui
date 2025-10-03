@@ -41,7 +41,7 @@
     <div class="test-section">
         <h2>📍 Current Status</h2>
         <div class="status success">
-            ✅ Development server running at <strong>http://localhost:8092/</strong>
+            ✅ Development server running at <strong id="dev-server-url">http://localhost:8080/</strong>
         </div>
         <div class="status success">
             ✅ Dashboard moved to root route (<strong>/</strong>) instead of <code>/dashboard</code>
@@ -132,7 +132,7 @@
     <div class="test-section">
         <h2>🎯 How to Test</h2>
         <ol>
-            <li>Open <a href="http://localhost:8092/" target="_blank">http://localhost:8092/</a></li>
+            <li>Open <a href="#" id="test-link" target="_blank">http://localhost:8080/</a></li>
             <li>Look for the small <strong>⚙️ gear icon</strong> in the bottom-right corner</li>
             <li>Either:
                 <ul>
@@ -190,7 +190,7 @@
     <div class="test-section">
         <h2>🔍 API Endpoints (for reference)</h2>
         <div class="status info">
-            All endpoints use base URL: <code>http://localhost:8090/interface/dashboard</code>
+            All endpoints use base URL: <code id="api-base-url">http://localhost:8090/interface/dashboard</code>
             <ul>
                 <li><code>POST /login/</code> - Authentication</li>
                 <li><code>DELETE /login/</code> - Logout</li>
@@ -225,10 +225,39 @@
     </div>
 
     <script>
+        // Environment configuration
+        const config = {
+            // Default development URLs
+            devServerUrl: 'http://localhost:8080/',
+            apiBaseUrl: 'http://localhost:8090/interface/dashboard',
+            
+            // Override with environment variables if available
+            ...(window.ENV || {})
+        };
+
         // Simple status check
         document.addEventListener('DOMContentLoaded', function() {
+            // Update URLs dynamically
+            const devServerElement = document.getElementById('dev-server-url');
+            const testLinkElement = document.getElementById('test-link');
+            const apiBaseElement = document.getElementById('api-base-url');
+            
+            if (devServerElement) {
+                devServerElement.textContent = config.devServerUrl;
+            }
+            
+            if (testLinkElement) {
+                testLinkElement.href = config.devServerUrl;
+                testLinkElement.textContent = config.devServerUrl;
+            }
+            
+            if (apiBaseElement) {
+                apiBaseElement.textContent = config.apiBaseUrl;
+            }
+            
             console.log('✅ Dashboard test page loaded');
-            console.log('🔗 Main app: http://localhost:8092/');
+            console.log('🔗 Main app:', config.devServerUrl);
+            console.log('🔗 API Base:', config.apiBaseUrl);
             console.log('⚙️ Look for gear icon in bottom-right corner');
         });
     </script>

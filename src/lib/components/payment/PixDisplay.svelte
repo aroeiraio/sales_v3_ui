@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { MEDIA_BASE_URL } from '../../utils/constants';
+  
   export let paymentResult: any = null;
   export let cart: { total: number };
   export let countdown: number = 60;
@@ -26,7 +28,7 @@
     <div class="qr-code-display">
       {#if paymentResult?.qrcode_source}
         <img 
-          src="http://localhost:8090{paymentResult.qrcode_source}" 
+          src="{MEDIA_BASE_URL}{paymentResult.qrcode_source}" 
           alt="QR Code PIX" 
           class="qr-code-image"
         />

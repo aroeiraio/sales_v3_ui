@@ -11,14 +11,22 @@ export class APIError extends Error {
 }
 
 export class APIClient {
-	private baseURL = 'http://localhost:8090/interface/dashboard';
+	private baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090/interface';
 
 	private async request<T>(
 		endpoint: string,
 		options: RequestInit = {}
 	): Promise<T> {
 		try {
-			const response = await fetch(`${this.baseURL}${endpoint}`, {
+			const fullUrl = `${this.baseURL}${endpoint}`;
+			console.log('API Request:', {
+				method: options.method || 'GET',
+				url: fullUrl,
+				baseURL: this.baseURL,
+				endpoint: endpoint
+			});
+			
+			const response = await fetch(fullUrl, {
 				headers: {
 					'Content-Type': 'application/json',
 					...options.headers
@@ -56,7 +64,22 @@ export class APIClient {
 
 			// Handle empty responses (like DELETE requests)
 			const contentType = response.headers.get('content-type');
+			console.log('API Response content type:', contentType);
+			
 			if (!contentType || !contentType.includes('application/json')) {
+				// For non-JSON responses, try to read as text to provide better error info
+				if (contentType && contentType.includes('text/html')) {
+					const htmlResponse = await response.text();
+					console.error('HTML response received instead of JSON:', {
+						url: fullUrl,
+						contentType,
+						htmlPreview: htmlResponse.substring(0, 200) + (htmlResponse.length > 200 ? '...' : '')
+					});
+					throw new APIError(
+						`Expected JSON response but received HTML. This usually means the API endpoint doesn't exist or the server is misconfigured. URL: ${fullUrl}`,
+						response.status
+					);
+				}
 				return {} as T;
 			}
 

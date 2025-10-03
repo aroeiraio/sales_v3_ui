@@ -110,7 +110,7 @@ class WebSocketService {
   private connectionStatus = writable<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
   private lastMessage = writable<WebSocketMessage | null>(null);
 
-  constructor(url = 'ws://localhost:9010') {
+  constructor(url = import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:9010') {
     this.url = url;
     this.setupBrowserEventHandlers();
   }

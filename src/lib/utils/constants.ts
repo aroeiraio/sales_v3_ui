@@ -3,6 +3,12 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
 export const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_BASE_URL || 'http://localhost:8090'; // Base URL for media files
 export const LOCAL_MEDIA_PATH = '/data/Projects/Inobag/sales_v3/build'; // Local build path for media files
 
+// Feature flags
+export const FEATURES = {
+  CUSTOMER_INFO_COLLECTION: import.meta.env.VITE_ENABLE_CUSTOMER_INFO === 'true' || false,
+  SYSTEM_STATUS_CHECK: import.meta.env.VITE_ENABLE_SYSTEM_STATUS_CHECK === 'true' || false
+} as const;
+
 // URL normalization patterns
 export const URL_PATTERNS = {
   // Patterns to replace in API responses
@@ -35,7 +41,7 @@ export const ENDPOINTS = {
   cart: '/cart',
   checkout: '/checkout',
   payment: '/payment',
-  delivery: '/sales/v1/delivery',
+  delivery: '/delivery',
   media: '/media' // Media endpoint
 } as const;
 

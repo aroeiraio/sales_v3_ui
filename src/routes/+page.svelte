@@ -22,6 +22,7 @@
 	import { sessionService } from '$lib/services/session';
 	import { systemStatusService } from '$lib/services/systemStatus';
 	import { appState } from '$lib/stores/app';
+	import { FEATURES } from '$lib/utils/constants';
 	import DashboardStart from '$lib/components/dashboard/DashboardStart.svelte';
 
 	let videoElement = $state<HTMLVideoElement>();
@@ -84,32 +85,65 @@
 
 	async function startShopping() {
 		try {
-			console.log('Starting shopping - checking system status first');
+			console.log('Starting shopping - system status check enabled:', FEATURES.SYSTEM_STATUS_CHECK);
+			console.log('Feature flags:', {
+				CUSTOMER_INFO_COLLECTION: FEATURES.CUSTOMER_INFO_COLLECTION,
+				SYSTEM_STATUS_CHECK: FEATURES.SYSTEM_STATUS_CHECK,
+				env_VITE_ENABLE_SYSTEM_STATUS_CHECK: import.meta.env.VITE_ENABLE_SYSTEM_STATUS_CHECK
+			});
 			// Stop any video playback
 			digitalSignageActions.stopPlayback();
 			
-			// Check for blocking conditions before starting session
-			const { isBlocked, reasons } = await systemStatusService.checkSystemBlocking();
-			
-			if (isBlocked) {
-				console.log('System is blocked, navigating to out-of-service page with reasons:', reasons);
-				// Navigate to out of service page with reasons
-				const reasonsParam = encodeURIComponent(JSON.stringify(reasons));
-				window.location.href = `/out-of-service?reasons=${reasonsParam}`;
-				return;
+			// Check system status only if feature is enabled
+			if (FEATURES.SYSTEM_STATUS_CHECK) {
+				console.log('Checking system status...');
+				const { isBlocked, reasons } = await systemStatusService.checkSystemBlocking();
+				
+				if (isBlocked) {
+					console.log('System is blocked, navigating to out-of-service page with reasons:', reasons);
+					// Navigate to out of service page with reasons
+					const reasonsParam = encodeURIComponent(JSON.stringify(reasons));
+					window.location.href = `/out-of-service?reasons=${reasonsParam}`;
+					return;
+				}
+				console.log('System is ready, proceeding to start session');
+			} else {
+				console.log('System status check disabled, skipping status check');
 			}
 			
-			console.log('System is ready, starting session');
 			// Start session and navigate to products
+			console.log('Attempting to start session...');
 			await sessionService.startSession();
 			console.log('Session started successfully, navigating to products');
 			window.location.href = '/products';
 		} catch (error) {
 			console.error('Error in startShopping:', error);
-			// If there's an error checking status, show out of service as fallback
-			const fallbackReasons = ['Erro de comunicação com o sistema'];
-			const reasonsParam = encodeURIComponent(JSON.stringify(fallbackReasons));
-			window.location.href = `/out-of-service?reasons=${reasonsParam}`;
+			console.error('Error details:', {
+				message: error.message,
+				stack: error.stack,
+				name: error.name
+			});
+			// Only show out of service if system status check is enabled
+			if (FEATURES.SYSTEM_STATUS_CHECK) {
+				console.log('System check enabled, redirecting to out-of-service');
+				const fallbackReasons = ['Erro de comunicação com o sistema'];
+				const reasonsParam = encodeURIComponent(JSON.stringify(fallbackReasons));
+				window.location.href = `/out-of-service?reasons=${reasonsParam}`;
+			} else {
+				// If system check is disabled, just proceed to products
+				console.log('System check disabled, proceeding despite error');
+				try {
+					console.log('Retrying session start...');
+					await sessionService.startSession();
+					console.log('Retry successful, navigating to products');
+					window.location.href = '/products';
+				} catch (sessionError) {
+					console.error('Failed to start session on retry:', sessionError);
+					console.log('Last resort: navigating to products without session');
+					// Last resort: go to products anyway
+					window.location.href = '/products';
+				}
+			}
 		}
 	}
 

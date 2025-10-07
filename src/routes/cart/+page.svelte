@@ -5,6 +5,7 @@
 	import { cartService, type Cart, type CartItem } from '$lib/services/cart';
 	import { errorDialogService } from '$lib/services/errorDialog';
 	import { sessionService } from '$lib/services/session';
+	import { FEATURES } from '$lib/utils/constants';
 
 	let settings: any = $state(null);
 	let currentTime = $state('');
@@ -124,7 +125,11 @@
 	}
 
 	function goToCheckout() {
-		window.location.href = '/payment/method-selection';
+		if (FEATURES.CUSTOMER_INFO_COLLECTION) {
+			window.location.href = '/checkout/customer-info';
+		} else {
+			window.location.href = '/payment/method-selection';
+		}
 	}
 
 	// Reset timeout on any user interaction

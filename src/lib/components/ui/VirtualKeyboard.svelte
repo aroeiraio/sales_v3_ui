@@ -1,9 +1,10 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { X, Space, ArrowUp, ChevronDown } from 'lucide-svelte';
+  import { X, Space, ArrowUp, ChevronDown, Delete } from 'lucide-svelte';
 
   export let isVisible = false;
   export let value = '';
+  export let numericMode = false;
   
   const dispatch = createEventDispatcher<{
     input: string;
@@ -20,6 +21,13 @@
     ['z', 'x', 'c', 'v', 'b', 'n', 'm']
   ];
 
+  const numericKeys = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+    ['↑', '0', '⌫']
+  ];
+
   const symbolKeys = [
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
     ['!', '@', '#', '$', '%', '&', '*', '(', ')'],
@@ -27,6 +35,17 @@
   ];
 
   function handleKeyPress(key: string) {
+    // Handle special keys in numeric mode
+    if (numericMode) {
+      if (key === '↑') {
+        // Handle up arrow - could be used for navigation or other functionality
+        return;
+      } else if (key === '⌫') {
+        handleBackspace();
+        return;
+      }
+    }
+    
     const newValue = value + (isUpperCase && !isSymbols ? key.toUpperCase() : key);
     dispatch('input', newValue);
   }
@@ -57,18 +76,18 @@
     dispatch('close');
   }
 
-  $: currentKeys = isSymbols ? symbolKeys : normalKeys;
+  $: currentKeys = numericMode ? numericKeys : (isSymbols ? symbolKeys : normalKeys);
 </script>
 
 {#if isVisible}
   <div class="keyboard-overlay" onclick={handleClose}>
-    <div class="virtual-keyboard" onclick={(e) => e.stopPropagation()}>
+    <div class="virtual-keyboard" class:numeric={numericMode} onclick={(e) => e.stopPropagation()}>
 
 
       <div class="keyboard-keys">
         {#each currentKeys as row, rowIndex}
           <div class="keyboard-row">
-            {#if rowIndex === 2 && !isSymbols}
+            {#if rowIndex === 2 && !isSymbols && !numericMode}
               <!-- Shift key for letters -->
               <button 
                 class="key special-key shift-key" 
@@ -88,13 +107,13 @@
               </button>
             {/each}
 
-            {#if rowIndex === 2}
+            {#if rowIndex === 2 && !numericMode}
               <!-- Backspace key -->
               <button 
                 class="key special-key backspace-key" 
                 onclick={handleBackspace}
               >
-                <X size={16} />
+                <Delete size={16} />
               </button>
             {/if}
           </div>
@@ -102,27 +121,40 @@
 
         <!-- Bottom row with special keys -->
         <div class="keyboard-row">
-          <button 
-            class="key special-key symbols-key" 
-            onclick={toggleSymbols}
-          >
-            {isSymbols ? 'ABC' : '123'}
-          </button>
+          {#if !numericMode}
+            <button 
+              class="key special-key symbols-key" 
+              onclick={toggleSymbols}
+            >
+              {isSymbols ? 'ABC' : '123'}
+            </button>
+          {/if}
           
-          <button 
-            class="key space-key" 
-            onclick={handleSpace}
-          >
-            <Space size={16} />
-            Espaço
-          </button>
+          {#if !numericMode}
+            <button 
+              class="key space-key" 
+              onclick={handleSpace}
+            >
+              <Space size={16} />
+              Espaço
+            </button>
+          {/if}
           
-          <button 
-            class="key special-key enter-key" 
-            onclick={handleEnter}
-          >
-            Buscar
-          </button>
+          {#if !numericMode}
+            <button 
+              class="key special-key enter-key" 
+              onclick={handleEnter}
+            >
+              Buscar
+            </button>
+          {:else}
+            <button 
+              class="key special-key enter-key" 
+              onclick={handleEnter}
+            >
+              Confirma
+            </button>
+          {/if}
           
           <button 
             class="key special-key close-key" 
@@ -164,6 +196,39 @@
     width: 100%;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
     animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .virtual-keyboard.numeric {
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .virtual-keyboard.numeric .keyboard-keys {
+    gap: 0.75rem;
+  }
+
+  .virtual-keyboard.numeric .keyboard-row {
+    gap: 0.5rem;
+    justify-content: stretch;
+  }
+
+  .virtual-keyboard.numeric .key {
+    min-height: 4rem;
+    font-size: 1.4rem;
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .virtual-keyboard.numeric .keyboard-row:last-child {
+    justify-content: stretch;
+  }
+
+  .virtual-keyboard.numeric .keyboard-row:last-child .key {
+    flex: 1;
+    min-width: 0;
   }
 
   @keyframes slideUp {
@@ -276,11 +341,25 @@
       max-width: 800px;
       border-radius: var(--radius-lg, 1rem) var(--radius-lg, 1rem) 0 0;
     }
+    
+    .virtual-keyboard.numeric {
+      max-width: 700px;
+    }
+
+    .virtual-keyboard.numeric .key {
+      min-height: 4.5rem;
+      font-size: 1.5rem;
+    }
   }
 
   @media (max-width: 480px) {
     .virtual-keyboard {
       padding: 1rem;
+    }
+
+    .virtual-keyboard.numeric .key {
+      min-height: 3.5rem;
+      font-size: 1.2rem;
     }
 
     .key {
